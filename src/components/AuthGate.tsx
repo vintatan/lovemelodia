@@ -13,6 +13,20 @@ const FEATURE_PILLS = [
   { icon: Film,         label: "Ken Burns + xfade" },
 ];
 
+const BLOBS = [
+  { className: "-top-32 -left-32 w-80 h-80 bg-violet-600/8", x: 20, scale: 1.15, duration: 9, delay: 0 },
+  { className: "-bottom-32 -right-32 w-96 h-96 bg-pink-600/6", x: -20, scale: 1.2, duration: 12, delay: 3 },
+  { className: "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-indigo-500/5", x: 0, scale: 1.3, duration: 7, delay: 1.5 },
+] as const;
+
+async function callAuth(url: string, body: object): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export default function AuthGate({ onAuth }: AuthGateProps) {
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
@@ -20,65 +34,50 @@ export default function AuthGate({ onAuth }: AuthGateProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function sendOtp() {
-    if (!phone.trim()) return;
+  async function withLoading(fn: () => Promise<void>) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/auth/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json() as { success?: boolean; error?: string };
-      if (!data.success) throw new Error(data.error ?? "Failed to send OTP");
-      setStep("otp");
+      await fn();
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function sendOtp() {
+    if (!phone.trim()) return;
+    withLoading(async () => {
+      const res = await callAuth("/api/auth/send-otp", { phone });
+      const data = await res.json() as { success?: boolean; error?: string };
+      if (!data.success) throw new Error(data.error ?? "Failed to send OTP");
+      setStep("otp");
+    });
   }
 
   async function verifyOtp() {
     if (!otp.trim()) return;
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/auth/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, otp }),
-      });
+    withLoading(async () => {
+      const res = await callAuth("/api/auth/verify-otp", { phone, otp });
       const data = await res.json() as { success?: boolean; token?: string; phone?: string; credits?: number; error?: string };
       if (!data.success || !data.token) throw new Error(data.error ?? "Invalid OTP");
       onAuth(data.token, data.phone!, data.credits ?? 100);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden">
-      {/* Background ambient blobs */}
+      {/* Ambient background blobs */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <motion.div
-          className="absolute -top-32 -left-32 w-80 h-80 rounded-full bg-violet-600/8 blur-3xl"
-          animate={{ scale: [1, 1.15, 1], x: [0, 20, 0] }}
-          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-pink-600/6 blur-3xl"
-          animate={{ scale: [1, 1.2, 1], x: [0, -20, 0] }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 3 }}
-        />
-        <motion.div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-indigo-500/5 blur-3xl"
-          animate={{ scale: [1, 1.3, 1] }}
-          transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1.5 }}
-        />
+        {BLOBS.map((b, i) => (
+          <motion.div
+            key={i}
+            className={`absolute rounded-full blur-3xl ${b.className}`}
+            animate={{ scale: [1, b.scale, 1], x: [0, b.x, 0] }}
+            transition={{ duration: b.duration, repeat: Infinity, ease: "easeInOut", delay: b.delay }}
+          />
+        ))}
       </div>
 
       {/* Hero */}
@@ -88,7 +87,6 @@ export default function AuthGate({ onAuth }: AuthGateProps) {
         transition={{ duration: 0.6, ease: [0.25, 1, 0.5, 1] }}
         className="text-center mb-10 max-w-sm relative"
       >
-        {/* Badge */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -118,7 +116,6 @@ export default function AuthGate({ onAuth }: AuthGateProps) {
           photorealistic scenes, AI-composed score, dramatic transitions.
         </motion.p>
 
-        {/* Feature pills */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -162,11 +159,7 @@ export default function AuthGate({ onAuth }: AuthGateProps) {
                 onChange={e => setPhone(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && sendOtp()}
               />
-              {error && (
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-red-400">
-                  {error}
-                </motion.p>
-              )}
+              {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-red-400">{error}</motion.p>}
               <Button loading={loading} onClick={sendOtp} size="lg" className="w-full">
                 Send OTP <ArrowRight className="w-4 h-4" />
               </Button>
@@ -189,11 +182,7 @@ export default function AuthGate({ onAuth }: AuthGateProps) {
                 onChange={e => setOtp(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && verifyOtp()}
               />
-              {error && (
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-red-400">
-                  {error}
-                </motion.p>
-              )}
+              {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-red-400">{error}</motion.p>}
               <Button loading={loading} onClick={verifyOtp} size="lg" className="w-full">
                 Login <ArrowRight className="w-4 h-4" />
               </Button>

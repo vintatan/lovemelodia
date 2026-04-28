@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Music, Film, Upload, CheckCircle2, XCircle } from "lucide-react";
 import { SectionHeading } from "../../UI.tsx";
 import VideoPlayer from "./VideoPlayer.tsx";
+import { apiFetch } from "../../../lib/api.ts";
 
 type AssemblyStatus = "generating_music" | "assembling_video" | "uploading" | "completed" | "failed";
 
@@ -44,12 +45,7 @@ function WaveformVisualizer({ active }: { active: boolean }) {
           className="w-1.5 rounded-full bg-[var(--accent-violet)]"
           style={{ height: `${h * 40}px`, originY: 1 }}
           animate={active ? { scaleY: [0.25, 1, 0.25], opacity: [0.5, 1, 0.5] } : { scaleY: 0.25, opacity: 0.3 }}
-          transition={active ? {
-            duration: 1.1,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: WAVEFORM_DELAYS[i],
-          } : { duration: 0.3 }}
+          transition={active ? { duration: 1.1, repeat: Infinity, ease: "easeInOut", delay: WAVEFORM_DELAYS[i] } : { duration: 0.3 }}
         />
       ))}
     </div>
@@ -58,17 +54,16 @@ function WaveformVisualizer({ active }: { active: boolean }) {
 
 function FilmStripProgress({ currentStatus }: { currentStatus: AssemblyStatus }) {
   const currentIdx = PROGRESS_STAGES.indexOf(currentStatus);
+  const isFailed = currentStatus === "failed";
   return (
     <div className="flex gap-1 items-center">
       {PROGRESS_STAGES.map((s, i) => {
-        const done = i <= currentIdx && currentStatus !== "failed";
-        const active = i === currentIdx && currentStatus !== "failed" && currentStatus !== "completed";
+        const done = !isFailed && i <= currentIdx;
+        const active = !isFailed && i === currentIdx && currentStatus !== "completed";
         return (
           <div key={s} className="flex items-center gap-1 flex-1">
             <motion.div
-              className={`h-1.5 flex-1 rounded-full ${
-                done ? "bg-violet-500" : "bg-[var(--bg-elevated)]"
-              }`}
+              className={`h-1.5 flex-1 rounded-full ${done ? "bg-violet-500" : "bg-[var(--bg-elevated)]"}`}
               initial={false}
               animate={{ scaleX: done ? 1 : 0, opacity: done ? 1 : 0.3 }}
               style={{ originX: 0 }}
@@ -98,31 +93,32 @@ export default function Stage3Assembly({ projectId, assemblyJobId, token }: Stag
   const [status, setStatus] = useState<AssemblyStatus>("generating_music");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const statusRef = useRef(status);
 
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/stage3/status/${assemblyJobId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json() as {
-          status?: AssemblyStatus; videoUrl?: string; error?: string;
-        };
-        if (data.status) setStatus(data.status);
-        if (data.videoUrl) setVideoUrl(data.videoUrl);
-        if (data.error) setError(data.error);
-        if (data.status === "completed" || data.status === "failed") {
-          clearInterval(interval);
+        const res = await apiFetch(`/api/stage3/status/${assemblyJobId}`, token);
+        const data = await res.json() as { status?: AssemblyStatus; videoUrl?: string; error?: string };
+
+        // Only update state when values actually change to avoid no-op re-renders
+        if (data.status && data.status !== statusRef.current) {
+          statusRef.current = data.status;
+          setStatus(data.status);
         }
+        if (data.videoUrl) setVideoUrl(prev => prev ?? data.videoUrl!);
+        if (data.error) setError(prev => prev ?? data.error!);
+
+        if (data.status === "completed" || data.status === "failed") clearInterval(interval);
       } catch { }
     }, 3000);
     return () => clearInterval(interval);
   }, [assemblyJobId, token]);
 
-  const Icon = STAGE_ICONS[status];
   const isDone = status === "completed";
   const isFailed = status === "failed";
   const isActive = !isDone && !isFailed;
+  const Icon = STAGE_ICONS[status];
 
   return (
     <div className="flex flex-col gap-6 max-w-md mx-auto">
@@ -132,7 +128,6 @@ export default function Stage3Assembly({ projectId, assemblyJobId, token }: Stag
         subtitle="Sit back while we compose and assemble your cinematic story."
       />
 
-      {/* Main status card */}
       <AnimatePresence mode="wait">
         <motion.div
           key={status}
@@ -141,18 +136,17 @@ export default function Stage3Assembly({ projectId, assemblyJobId, token }: Stag
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
           className={`card-glass p-6 flex flex-col items-center gap-4 text-center ${
-            isDone ? "border-green-500/25 shadow-glow-green" :
+            isDone   ? "border-green-500/25 shadow-glow-green" :
             isFailed ? "border-red-500/20" :
-            "border-[var(--border-accent)] shadow-glow"
+                       "border-[var(--border-accent)] shadow-glow"
           }`}
         >
-          {/* Icon or waveform */}
           {status === "generating_music" ? (
             <div className="flex flex-col items-center gap-3">
               <div className="p-3 rounded-2xl bg-violet-500/10">
                 <Music className="w-7 h-7 text-[var(--accent-violet)]" />
               </div>
-              <WaveformVisualizer active={true} />
+              <WaveformVisualizer active />
             </div>
           ) : isActive ? (
             <motion.div
@@ -180,18 +174,17 @@ export default function Stage3Assembly({ projectId, assemblyJobId, token }: Stag
             <p className="text-xs text-[var(--text-muted)]">{STAGE_SUBTITLES[status]}</p>
           </div>
 
-          {error && <p className="text-xs text-red-400 bg-red-500/5 px-3 py-2 rounded-lg border border-red-500/10">{error}</p>}
-
+          {error && (
+            <p className="text-xs text-red-400 bg-red-500/5 px-3 py-2 rounded-lg border border-red-500/10">{error}</p>
+          )}
           {isActive && (
             <p className="text-xs text-[var(--text-faint)]">Est. 2–4 minutes · please keep this tab open</p>
           )}
         </motion.div>
       </AnimatePresence>
 
-      {/* Progress bar */}
       <FilmStripProgress currentStatus={status} />
 
-      {/* Stage labels */}
       <div className="flex justify-between text-xs text-[var(--text-faint)] -mt-4 px-0.5">
         <span>Music</span>
         <span>Assemble</span>
@@ -199,7 +192,6 @@ export default function Stage3Assembly({ projectId, assemblyJobId, token }: Stag
         <span>Done</span>
       </div>
 
-      {/* Video player */}
       {videoUrl && (
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <VideoPlayer videoUrl={videoUrl} />

@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Zap, CreditCard, Gift } from "lucide-react";
-import { Button } from "./UI.tsx";
+import { apiFetch } from "../lib/api.ts";
 
 interface Package {
   name: string;
@@ -10,12 +11,12 @@ interface Package {
 }
 
 const PACKAGES: Package[] = [
-  { name: "Starter",    credits: 200,  price: "Rp 20.000" },
-  { name: "Creator",    credits: 500,  price: "Rp 45.000", highlight: true },
-  { name: "Studio",     credits: 1200, price: "Rp 99.000" },
+  { name: "Starter", credits: 200,  price: "Rp 20.000" },
+  { name: "Creator", credits: 500,  price: "Rp 45.000", highlight: true },
+  { name: "Studio",  credits: 1200, price: "Rp 99.000" },
 ];
 
-const CREDIT_COSTS = [
+const CREDIT_COSTS: Array<{ action: string; cost: string }> = [
   { action: "Stage 1 — Enhance prompt + timeline", cost: "5 credits" },
   { action: "Stage 2 — Per storyboard frame",      cost: "5 credits" },
   { action: "Stage 3 — Music + video assembly",    cost: "30 credits" },
@@ -31,11 +32,14 @@ interface CreditsModalProps {
 }
 
 export default function CreditsModal({ open, credits, token, onClose, onPurchased }: CreditsModalProps) {
+  const [purchasing, setPurchasing] = useState(false);
+
   async function handlePurchase(pkg: Package) {
+    if (purchasing) return;
+    setPurchasing(true);
     try {
-      const res = await fetch("/api/credits/purchase", {
+      const res = await apiFetch("/api/credits/purchase", token, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ packageName: pkg.name.toLowerCase(), amount: pkg.credits }),
       });
       const data = await res.json() as { paymentUrl?: string; error?: string };
@@ -47,6 +51,8 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
       }
     } catch {
       alert("Network error. Please try again.");
+    } finally {
+      setPurchasing(false);
     }
   }
 
@@ -54,7 +60,6 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
@@ -65,7 +70,6 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
             onClick={onClose}
           />
 
-          {/* Modal */}
           <motion.div
             key="modal"
             initial={{ opacity: 0, y: 32, scale: 0.96 }}
@@ -75,30 +79,31 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
             className="fixed inset-x-4 bottom-4 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 z-50 w-auto sm:w-full sm:max-w-sm"
           >
             <div className="card-glass p-5 shadow-glow-lg">
-              {/* Header */}
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                   <Zap className="w-4 h-4 text-[var(--accent-violet)]" />
                   <span className="font-semibold text-sm">Top Up Credits</span>
                 </div>
-                <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors">
-                  <X className="w-4 h-4 text-[var(--text-muted)]" />
+                <button
+                  onClick={onClose}
+                  className="p-1.5 rounded-lg hover:bg-[var(--bg-elevated)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Current balance */}
               <div className="card-elevated p-3 flex items-center justify-between mb-4">
                 <span className="text-xs text-[var(--text-muted)]">Current balance</span>
                 <span className="text-sm font-semibold text-[var(--accent-violet)]">{credits} credits</span>
               </div>
 
-              {/* Packages */}
               <div className="flex flex-col gap-2 mb-4">
                 {PACKAGES.map(pkg => (
                   <button
                     key={pkg.name}
                     onClick={() => handlePurchase(pkg)}
-                    className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all hover:brightness-110 active:scale-98 ${
+                    disabled={purchasing}
+                    className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed ${
                       pkg.highlight
                         ? "bg-violet-500/10 border-[var(--accent-violet)]/30 shadow-glow"
                         : "bg-[var(--bg-elevated)] border-[var(--border-subtle)] hover:border-[var(--border-accent)]"
@@ -121,7 +126,6 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
                 ))}
               </div>
 
-              {/* Credit costs reference */}
               <div className="border-t border-[var(--border-subtle)] pt-4">
                 <p className="text-xs text-[var(--text-faint)] flex items-center gap-1.5 mb-2">
                   <Gift className="w-3.5 h-3.5" /> What costs what
@@ -130,7 +134,9 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
                   {CREDIT_COSTS.map(c => (
                     <div key={c.action} className="flex justify-between text-xs">
                       <span className="text-[var(--text-faint)]">{c.action}</span>
-                      <span className={`font-mono ${c.cost.startsWith("+") ? "text-[var(--accent-green)]" : "text-[var(--text-muted)]"}`}>{c.cost}</span>
+                      <span className={`font-mono ${c.cost.startsWith("+") ? "text-[var(--accent-green)]" : "text-[var(--text-muted)]"}`}>
+                        {c.cost}
+                      </span>
                     </div>
                   ))}
                 </div>

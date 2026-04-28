@@ -1,12 +1,13 @@
 import { motion } from "motion/react";
 import { RefreshCw } from "lucide-react";
 import { Badge } from "../../UI.tsx";
+import { INTENSITY, type Intensity } from "../../../lib/intensity.ts";
 
 interface Timepoint {
   timestamp: string;
   label: string;
   mood: string;
-  intensity: "low" | "medium" | "high";
+  intensity: Intensity;
 }
 
 interface StoryboardFrameProps {
@@ -18,22 +19,23 @@ interface StoryboardFrameProps {
   creditsRemaining: number;
 }
 
+function FilmHoles() {
+  return (
+    <div className="flex gap-1 px-1 justify-around opacity-30">
+      {Array.from({ length: 4 }).map((_, i) => <div key={i} className="film-hole" />)}
+    </div>
+  );
+}
+
 export default function StoryboardFrame({ timepoint, imageUrl, loading, error, onRegen, creditsRemaining }: StoryboardFrameProps) {
-  const intensityGlow = {
-    high:   "shadow-[0_0_16px_rgba(239,68,68,0.25)]",
-    medium: "shadow-[0_0_16px_rgba(245,158,11,0.2)]",
-    low:    "shadow-[0_0_16px_rgba(34,197,94,0.15)]",
-  }[timepoint.intensity];
+  const config = INTENSITY[timepoint.intensity];
+  const hasImage = Boolean(imageUrl) && !loading;
 
   return (
     <div className="flex flex-col gap-1.5">
-      {/* Film holes top */}
-      <div className="flex gap-1 px-1 justify-around opacity-30">
-        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="film-hole" />)}
-      </div>
+      <FilmHoles />
 
-      <div className={`relative aspect-[9/16] rounded-xl overflow-hidden bg-[var(--bg-elevated)] border border-[var(--border-subtle)] transition-shadow duration-300 ${imageUrl && !loading ? intensityGlow : ""}`}>
-        {/* Shimmer loading state */}
+      <div className={`relative aspect-[9/16] rounded-xl overflow-hidden bg-[var(--bg-elevated)] border border-[var(--border-subtle)] transition-shadow duration-300 ${hasImage ? config.glow : ""}`}>
         {loading && (
           <div className="absolute inset-0 shimmer flex flex-col items-center justify-center gap-3">
             <motion.div
@@ -45,18 +47,16 @@ export default function StoryboardFrame({ timepoint, imageUrl, loading, error, o
           </div>
         )}
 
-        {/* Loaded image */}
-        {imageUrl && !loading && (
+        {hasImage && (
           <>
             <motion.img
-              src={imageUrl}
+              src={imageUrl!}
               alt={timepoint.label}
               className="w-full h-full object-cover"
               initial={{ opacity: 0, scale: 1.06 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, ease: [0.25, 1, 0.5, 1] }}
             />
-            {/* Cinematic vignette */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10 pointer-events-none" />
           </>
         )}
@@ -67,8 +67,7 @@ export default function StoryboardFrame({ timepoint, imageUrl, loading, error, o
           </div>
         )}
 
-        {/* Regen button */}
-        {imageUrl && !loading && (
+        {hasImage && (
           <motion.button
             onClick={onRegen}
             disabled={creditsRemaining < 5}
@@ -81,7 +80,6 @@ export default function StoryboardFrame({ timepoint, imageUrl, loading, error, o
           </motion.button>
         )}
 
-        {/* Timestamp overlay */}
         <div className="absolute bottom-2 left-2">
           <span className="text-xs font-mono bg-black/70 text-[var(--accent-violet)] px-1.5 py-0.5 rounded-md backdrop-blur-sm">
             {timepoint.timestamp}
@@ -89,16 +87,11 @@ export default function StoryboardFrame({ timepoint, imageUrl, loading, error, o
         </div>
       </div>
 
-      {/* Film holes bottom */}
-      <div className="flex gap-1 px-1 justify-around opacity-30">
-        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="film-hole" />)}
-      </div>
+      <FilmHoles />
 
       <div className="flex items-center justify-between px-0.5">
         <span className="text-xs font-medium text-[var(--text-primary)] truncate">{timepoint.label}</span>
-        <Badge color={timepoint.intensity === "high" ? "red" : timepoint.intensity === "medium" ? "amber" : "green"}>
-          {timepoint.mood}
-        </Badge>
+        <Badge color={config.badgeColor}>{timepoint.mood}</Badge>
       </div>
     </div>
   );

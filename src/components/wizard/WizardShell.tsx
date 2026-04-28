@@ -5,12 +5,9 @@ import Stage1Form from "./Stage1/Stage1Form.tsx";
 import Stage1Result from "./Stage1/Stage1Result.tsx";
 import Stage2Storyboard from "./Stage2/Stage2Storyboard.tsx";
 import Stage3Assembly from "./Stage3/Stage3Assembly.tsx";
+import { apiFetch } from "../../lib/api.ts";
 
-type WizardStep =
-  | "stage1_form"
-  | "stage1_result"
-  | "stage2_storyboard"
-  | "stage3_assembly";
+type WizardStep = "stage1_form" | "stage1_result" | "stage2_storyboard" | "stage3_assembly";
 
 interface Timepoint {
   timestamp: string;
@@ -48,7 +45,7 @@ const STEP_ICONS: Record<WizardStep, string> = {
 
 export default function WizardShell({ token, phone, credits, onCreditsUpdate, onTopUp }: WizardShellProps) {
   const [step, setStep] = useState<WizardStep>("stage1_form");
-  const [stepDir, setStepDir] = useState(1); // 1 = forward, -1 = backward
+  const [stepDir, setStepDir] = useState(1);
   const [loading, setLoading] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [enhancedPrompt, setEnhancedPrompt] = useState("");
@@ -56,8 +53,9 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
   const [assemblyJobId, setAssemblyJobId] = useState<string | null>(null);
 
   function goTo(next: WizardStep) {
-    const dir = STEPS.indexOf(next) > STEPS.indexOf(step) ? 1 : -1;
-    setStepDir(dir);
+    const nextIdx = STEPS.indexOf(next);
+    const currIdx = STEPS.indexOf(step);
+    setStepDir(nextIdx > currIdx ? 1 : -1);
     setStep(next);
   }
 
@@ -69,9 +67,8 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
   }) {
     setLoading(true);
     try {
-      const res = await fetch("/api/stage1/enhance", {
+      const res = await apiFetch("/api/stage1/enhance", token, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(params),
       });
       const data = await res.json() as {
@@ -85,48 +82,50 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
       if (data.creditsRemaining !== undefined) onCreditsUpdate(data.creditsRemaining);
       goTo("stage1_result");
     } catch (err: any) {
-      console.error(err);
       alert(err.message);
     } finally {
       setLoading(false);
     }
   }
 
-  function handleStage1Approve() {
-    goTo("stage2_storyboard");
-  }
-
   async function handleStage2Approve() {
     if (!projectId) return;
-    await fetch("/api/stage2/approve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ projectId }),
-    });
-    const res = await fetch("/api/stage3/assemble", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ projectId }),
-    });
-    const data = await res.json() as { assemblyJobId?: string; error?: string };
-    if (!res.ok) { alert(data.error ?? "Assembly failed to start"); return; }
-    setAssemblyJobId(data.assemblyJobId!);
-    onCreditsUpdate(credits - 30);
-    goTo("stage3_assembly");
+    try {
+      // Approve and kick off assembly in parallel — approve is a DB-only status update
+      const [approveRes, assembleRes] = await Promise.all([
+        apiFetch("/api/stage2/approve", token, {
+          method: "POST",
+          body: JSON.stringify({ projectId }),
+        }),
+        apiFetch("/api/stage3/assemble", token, {
+          method: "POST",
+          body: JSON.stringify({ projectId }),
+        }),
+      ]);
+      if (!approveRes.ok) {
+        const d = await approveRes.json() as { error?: string };
+        throw new Error(d.error ?? "Approve failed");
+      }
+      const data = await assembleRes.json() as { assemblyJobId?: string; error?: string };
+      if (!assembleRes.ok) throw new Error(data.error ?? "Assembly failed to start");
+      setAssemblyJobId(data.assemblyJobId!);
+      onCreditsUpdate(credits - 30);
+      goTo("stage3_assembly");
+    } catch (err: any) {
+      alert(err.message);
+    }
   }
 
   const currentIdx = STEPS.indexOf(step);
-  const progressPct = ((currentIdx) / (STEPS.length - 1)) * 100;
+  const progressPct = (currentIdx / (STEPS.length - 1)) * 100;
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] sticky top-0 z-20 bg-[var(--bg-primary)]/90 backdrop-blur-md">
         <h1 className="heading-display text-base text-gradient-studio">Kreasi AI</h1>
         <CreditsBadge credits={credits} onTopUp={onTopUp} />
       </header>
 
-      {/* Progress track */}
       <div className="relative h-0.5 bg-[var(--bg-elevated)] overflow-hidden">
         <motion.div
           className="absolute inset-y-0 left-0 bg-gradient-violet"
@@ -135,7 +134,6 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
         />
       </div>
 
-      {/* Step tabs */}
       <div className="flex border-b border-[var(--border-subtle)] overflow-x-auto bg-[var(--bg-primary)]/60">
         {STEPS.map((s, i) => {
           const isActive = i === currentIdx;
@@ -168,7 +166,6 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
         })}
       </div>
 
-      {/* Content */}
       <main className="flex-1 px-4 py-6 overflow-y-auto">
         <AnimatePresence mode="wait" custom={stepDir}>
           <motion.div
@@ -186,7 +183,7 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
               <Stage1Result
                 enhancedPrompt={enhancedPrompt}
                 timepoints={timepoints}
-                onApprove={handleStage1Approve}
+                onApprove={() => goTo("stage2_storyboard")}
                 onEdit={() => goTo("stage1_form")}
                 creditsRemaining={credits}
               />
