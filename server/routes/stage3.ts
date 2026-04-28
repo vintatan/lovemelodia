@@ -24,10 +24,11 @@ router.post("/assemble", async (req, res) => {
     return res.status(400).json({ error: "Stage 2 not completed" });
   }
 
-  const frames = JSON.parse(project.frames_json) as Array<{ timepointIndex: number; imageUrl: string } | null>;
-  if (frames.some(f => f === null)) {
+  const rawFrames = JSON.parse(project.frames_json) as Array<{ timepointIndex: number; imageUrl: string } | null>;
+  if (rawFrames.some(f => f === null)) {
     return res.status(400).json({ error: "Not all frames completed" });
   }
+  const frames = rawFrames as Array<{ timepointIndex: number; imageUrl: string }>;
 
   const deducted = await deductCreditsAsync(phone, STAGE3_CREDITS);
   if (!deducted) {
