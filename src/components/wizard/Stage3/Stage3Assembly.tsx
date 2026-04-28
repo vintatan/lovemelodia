@@ -1,17 +1,25 @@
 import { useState, useEffect } from "react";
-import { motion } from "motion/react";
-import { Music, Film, Upload, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Music, Film, Upload, CheckCircle2, XCircle } from "lucide-react";
 import { SectionHeading } from "../../UI.tsx";
 import VideoPlayer from "./VideoPlayer.tsx";
 
 type AssemblyStatus = "generating_music" | "assembling_video" | "uploading" | "completed" | "failed";
 
 const STAGE_LABELS: Record<AssemblyStatus, string> = {
-  generating_music: "Generating music with Lyria 3 Pro…",
-  assembling_video: "Assembling storyboard with Ken Burns + dramatic transitions…",
-  uploading:        "Uploading final video…",
+  generating_music: "Composing with Lyria 3 Pro…",
+  assembling_video: "Assembling cinematic scenes…",
+  uploading:        "Uploading your music video…",
   completed:        "Your music video is ready!",
-  failed:           "Assembly failed. Credits refunded.",
+  failed:           "Assembly failed — credits refunded.",
+};
+
+const STAGE_SUBTITLES: Record<AssemblyStatus, string> = {
+  generating_music: "AI is writing and performing your custom score",
+  assembling_video: "Applying Ken Burns motion and dramatic transitions",
+  uploading:        "Almost there…",
+  completed:        "Download or share your cinematic story",
+  failed:           "Something went wrong. Your 30 credits have been returned.",
 };
 
 const STAGE_ICONS: Record<AssemblyStatus, typeof Music> = {
@@ -21,6 +29,64 @@ const STAGE_ICONS: Record<AssemblyStatus, typeof Music> = {
   completed:        CheckCircle2,
   failed:           XCircle,
 };
+
+const PROGRESS_STAGES: AssemblyStatus[] = ["generating_music", "assembling_video", "uploading", "completed"];
+
+const WAVEFORM_DELAYS = [0, 0.15, 0.3, 0.1, 0.25, 0.05, 0.2, 0.35];
+const WAVEFORM_HEIGHTS = [0.4, 0.7, 1, 0.55, 0.85, 0.45, 0.9, 0.6];
+
+function WaveformVisualizer({ active }: { active: boolean }) {
+  return (
+    <div className="flex items-end gap-0.5 h-10" aria-hidden>
+      {WAVEFORM_HEIGHTS.map((h, i) => (
+        <motion.div
+          key={i}
+          className="w-1.5 rounded-full bg-[var(--accent-violet)]"
+          style={{ height: `${h * 40}px`, originY: 1 }}
+          animate={active ? { scaleY: [0.25, 1, 0.25], opacity: [0.5, 1, 0.5] } : { scaleY: 0.25, opacity: 0.3 }}
+          transition={active ? {
+            duration: 1.1,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: WAVEFORM_DELAYS[i],
+          } : { duration: 0.3 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FilmStripProgress({ currentStatus }: { currentStatus: AssemblyStatus }) {
+  const currentIdx = PROGRESS_STAGES.indexOf(currentStatus);
+  return (
+    <div className="flex gap-1 items-center">
+      {PROGRESS_STAGES.map((s, i) => {
+        const done = i <= currentIdx && currentStatus !== "failed";
+        const active = i === currentIdx && currentStatus !== "failed" && currentStatus !== "completed";
+        return (
+          <div key={s} className="flex items-center gap-1 flex-1">
+            <motion.div
+              className={`h-1.5 flex-1 rounded-full ${
+                done ? "bg-violet-500" : "bg-[var(--bg-elevated)]"
+              }`}
+              initial={false}
+              animate={{ scaleX: done ? 1 : 0, opacity: done ? 1 : 0.3 }}
+              style={{ originX: 0 }}
+              transition={{ duration: 0.5, ease: [0.25, 1, 0.5, 1] }}
+            />
+            {active && (
+              <motion.div
+                className="w-1.5 h-1.5 rounded-full bg-[var(--accent-violet)] glow-pulse"
+                animate={{ scale: [1, 1.4, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 interface Stage3Props {
   projectId: string;
@@ -56,57 +122,89 @@ export default function Stage3Assembly({ projectId, assemblyJobId, token }: Stag
   const Icon = STAGE_ICONS[status];
   const isDone = status === "completed";
   const isFailed = status === "failed";
+  const isActive = !isDone && !isFailed;
 
   return (
-    <div className="flex flex-col gap-5 max-w-md mx-auto">
+    <div className="flex flex-col gap-6 max-w-md mx-auto">
       <SectionHeading
         step={3}
         title="Creating Your Music Video"
         subtitle="Sit back while we compose and assemble your cinematic story."
       />
 
-      {/* Status card */}
-      <motion.div
-        key={status}
-        initial={{ opacity: 0, scale: 0.97 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className={`card-glass p-5 flex flex-col items-center gap-3 text-center ${
-          isDone ? "border-green-500/20" : isFailed ? "border-red-500/20" : "border-[var(--border-accent)]"
-        }`}
-      >
-        <div className={`p-3 rounded-2xl ${
-          isDone ? "bg-green-500/10" : isFailed ? "bg-red-500/10" : "bg-violet-500/10"
-        }`}>
-          {!isDone && !isFailed ? (
-            <Loader2 className="w-7 h-7 text-[var(--accent-violet)] animate-spin" />
+      {/* Main status card */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={status}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
+          className={`card-glass p-6 flex flex-col items-center gap-4 text-center ${
+            isDone ? "border-green-500/25 shadow-glow-green" :
+            isFailed ? "border-red-500/20" :
+            "border-[var(--border-accent)] shadow-glow"
+          }`}
+        >
+          {/* Icon or waveform */}
+          {status === "generating_music" ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="p-3 rounded-2xl bg-violet-500/10">
+                <Music className="w-7 h-7 text-[var(--accent-violet)]" />
+              </div>
+              <WaveformVisualizer active={true} />
+            </div>
+          ) : isActive ? (
+            <motion.div
+              className="p-3 rounded-2xl bg-violet-500/10"
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <Icon className="w-7 h-7 text-[var(--accent-violet)]" />
+            </motion.div>
           ) : (
-            <Icon className={`w-7 h-7 ${isDone ? "text-green-400" : "text-red-400"}`} />
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 260, damping: 20 }}
+              className={`p-3 rounded-2xl ${isDone ? "bg-green-500/10" : "bg-red-500/10"}`}
+            >
+              <Icon className={`w-7 h-7 ${isDone ? "text-green-400" : "text-red-400"}`} />
+            </motion.div>
           )}
-        </div>
-        <p className={`text-sm font-medium ${isFailed ? "text-red-300" : "text-[var(--text-primary)]"}`}>
-          {STAGE_LABELS[status]}
-        </p>
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        {!isDone && !isFailed && (
-          <p className="text-xs text-[var(--text-faint)]">This takes 2–4 minutes</p>
-        )}
-      </motion.div>
 
-      {/* Progress steps */}
-      <div className="flex gap-2">
-        {(["generating_music", "assembling_video", "uploading", "completed"] as AssemblyStatus[]).map((s, i) => {
-          const stages: AssemblyStatus[] = ["generating_music", "assembling_video", "uploading", "completed"];
-          const currentIdx = stages.indexOf(status);
-          const stepIdx = stages.indexOf(s);
-          const done = stepIdx <= currentIdx;
-          return (
-            <div key={s} className={`flex-1 h-1 rounded-full transition-all duration-500 ${done ? "bg-violet-500" : "bg-[var(--bg-elevated)]"}`} />
-          );
-        })}
+          <div className="flex flex-col gap-1">
+            <p className={`text-base font-semibold ${isFailed ? "text-red-300" : "text-[var(--text-primary)]"}`}>
+              {STAGE_LABELS[status]}
+            </p>
+            <p className="text-xs text-[var(--text-muted)]">{STAGE_SUBTITLES[status]}</p>
+          </div>
+
+          {error && <p className="text-xs text-red-400 bg-red-500/5 px-3 py-2 rounded-lg border border-red-500/10">{error}</p>}
+
+          {isActive && (
+            <p className="text-xs text-[var(--text-faint)]">Est. 2–4 minutes · please keep this tab open</p>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Progress bar */}
+      <FilmStripProgress currentStatus={status} />
+
+      {/* Stage labels */}
+      <div className="flex justify-between text-xs text-[var(--text-faint)] -mt-4 px-0.5">
+        <span>Music</span>
+        <span>Assemble</span>
+        <span>Upload</span>
+        <span>Done</span>
       </div>
 
       {/* Video player */}
-      {videoUrl && <VideoPlayer videoUrl={videoUrl} />}
+      {videoUrl && (
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <VideoPlayer videoUrl={videoUrl} />
+        </motion.div>
+      )}
     </div>
   );
 }

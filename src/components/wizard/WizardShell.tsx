@@ -32,20 +32,34 @@ interface WizardShellProps {
   onTopUp: () => void;
 }
 
+const STEPS: WizardStep[] = ["stage1_form", "stage1_result", "stage2_storyboard", "stage3_assembly"];
 const STEP_LABELS: Record<WizardStep, string> = {
-  stage1_form:      "Describe",
-  stage1_result:    "Review Plan",
-  stage2_storyboard:"Storyboard",
-  stage3_assembly:  "Music Video",
+  stage1_form:       "Describe",
+  stage1_result:     "Review",
+  stage2_storyboard: "Storyboard",
+  stage3_assembly:   "Music Video",
+};
+const STEP_ICONS: Record<WizardStep, string> = {
+  stage1_form:       "✦",
+  stage1_result:     "◈",
+  stage2_storyboard: "⬚",
+  stage3_assembly:   "▶",
 };
 
 export default function WizardShell({ token, phone, credits, onCreditsUpdate, onTopUp }: WizardShellProps) {
   const [step, setStep] = useState<WizardStep>("stage1_form");
+  const [stepDir, setStepDir] = useState(1); // 1 = forward, -1 = backward
   const [loading, setLoading] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [enhancedPrompt, setEnhancedPrompt] = useState("");
   const [timepoints, setTimepoints] = useState<Timepoint[]>([]);
   const [assemblyJobId, setAssemblyJobId] = useState<string | null>(null);
+
+  function goTo(next: WizardStep) {
+    const dir = STEPS.indexOf(next) > STEPS.indexOf(step) ? 1 : -1;
+    setStepDir(dir);
+    setStep(next);
+  }
 
   async function handleStage1Submit(params: {
     characterImageBase64: string | null;
@@ -69,7 +83,7 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
       setEnhancedPrompt(data.enhancedPrompt!);
       setTimepoints(data.timepoints!);
       if (data.creditsRemaining !== undefined) onCreditsUpdate(data.creditsRemaining);
-      setStep("stage1_result");
+      goTo("stage1_result");
     } catch (err: any) {
       console.error(err);
       alert(err.message);
@@ -79,18 +93,16 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
   }
 
   function handleStage1Approve() {
-    setStep("stage2_storyboard");
+    goTo("stage2_storyboard");
   }
 
   async function handleStage2Approve() {
     if (!projectId) return;
-    // Approve storyboard on server
     await fetch("/api/stage2/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ projectId }),
     });
-    // Start stage 3 assembly
     const res = await fetch("/api/stage3/assemble", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -99,49 +111,73 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
     const data = await res.json() as { assemblyJobId?: string; error?: string };
     if (!res.ok) { alert(data.error ?? "Assembly failed to start"); return; }
     setAssemblyJobId(data.assemblyJobId!);
-    onCreditsUpdate(credits - 30); // optimistic
-    setStep("stage3_assembly");
+    onCreditsUpdate(credits - 30);
+    goTo("stage3_assembly");
   }
 
-  const steps: WizardStep[] = ["stage1_form", "stage1_result", "stage2_storyboard", "stage3_assembly"];
-  const currentIdx = steps.indexOf(step);
+  const currentIdx = STEPS.indexOf(step);
+  const progressPct = ((currentIdx) / (STEPS.length - 1)) * 100;
 
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] sticky top-0 z-10 bg-[var(--bg-primary)]/80 backdrop-blur-sm">
-        <h1 className="heading-display text-sm text-gradient-studio">Kreasi AI</h1>
+      <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] sticky top-0 z-20 bg-[var(--bg-primary)]/90 backdrop-blur-md">
+        <h1 className="heading-display text-base text-gradient-studio">Kreasi AI</h1>
         <CreditsBadge credits={credits} onTopUp={onTopUp} />
       </header>
 
-      {/* Step indicator */}
-      <div className="flex border-b border-[var(--border-subtle)] overflow-x-auto">
-        {steps.map((s, i) => (
-          <div
-            key={s}
-            className={`flex-1 min-w-fit px-3 py-2.5 text-xs text-center whitespace-nowrap transition-all ${
-              i === currentIdx
-                ? "text-[var(--accent-violet)] border-b-2 border-[var(--accent-violet)]"
-                : i < currentIdx
-                ? "text-[var(--text-muted)]"
-                : "text-[var(--text-faint)]"
-            }`}
-          >
-            <span className="mr-1.5">{i + 1}.</span>
-            {STEP_LABELS[s]}
-          </div>
-        ))}
+      {/* Progress track */}
+      <div className="relative h-0.5 bg-[var(--bg-elevated)] overflow-hidden">
+        <motion.div
+          className="absolute inset-y-0 left-0 bg-gradient-violet"
+          animate={{ width: `${progressPct}%` }}
+          transition={{ duration: 0.6, ease: [0.25, 1, 0.5, 1] }}
+        />
+      </div>
+
+      {/* Step tabs */}
+      <div className="flex border-b border-[var(--border-subtle)] overflow-x-auto bg-[var(--bg-primary)]/60">
+        {STEPS.map((s, i) => {
+          const isActive = i === currentIdx;
+          const isDone = i < currentIdx;
+          return (
+            <div
+              key={s}
+              className={`relative flex-1 min-w-fit px-3 py-2.5 text-center transition-all duration-300 ${
+                isActive ? "text-[var(--accent-violet)]" :
+                isDone   ? "text-[var(--text-muted)]" :
+                           "text-[var(--text-faint)]"
+              }`}
+            >
+              <span className="text-xs whitespace-nowrap">
+                <span className="mr-1 font-mono">{STEP_ICONS[s]}</span>
+                {STEP_LABELS[s]}
+              </span>
+              {isActive && (
+                <motion.div
+                  layoutId="step-indicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-violet)]"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              {isDone && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-violet)]/30" />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Content */}
       <main className="flex-1 px-4 py-6 overflow-y-auto">
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" custom={stepDir}>
           <motion.div
             key={step}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
+            custom={stepDir}
+            initial={{ opacity: 0, x: stepDir * 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: stepDir * -20 }}
+            transition={{ duration: 0.28, ease: [0.25, 1, 0.5, 1] }}
           >
             {step === "stage1_form" && (
               <Stage1Form onSubmit={handleStage1Submit} loading={loading} />
@@ -151,7 +187,7 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
                 enhancedPrompt={enhancedPrompt}
                 timepoints={timepoints}
                 onApprove={handleStage1Approve}
-                onEdit={() => setStep("stage1_form")}
+                onEdit={() => goTo("stage1_form")}
                 creditsRemaining={credits}
               />
             )}

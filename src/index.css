@@ -114,3 +114,61 @@
 .intensity-high   { background: rgba(239,68,68,0.15); color: #ef4444; }
 
 select option { background: #13121f; color: #f1f0f0; }
+
+/* Waveform bars animation */
+@keyframes waveform {
+  0%, 100% { scaleY: 0.3; }
+  50%       { scaleY: 1; }
+}
+.waveform-bar {
+  transform-origin: bottom;
+  animation: waveform-bounce 1.2s ease-in-out infinite;
+}
+@keyframes waveform-bounce {
+  0%, 100% { transform: scaleY(0.25); }
+  50%       { transform: scaleY(1); }
+}
+
+/* Film strip hole */
+.film-hole {
+  width: 8px; height: 10px;
+  border-radius: 2px;
+  background: var(--bg-primary);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Glow pulse */
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; }
+}
+.glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+
+/* Float */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+.float-anim { animation: float-y 4s ease-in-out infinite; }
+
+/* Stage transition slide */
+.slide-up-enter { opacity: 0; transform: translateY(20px); }
+.slide-up-exit  { opacity: 0; transform: translateY(-12px); }
+
+/* Shimmer */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.shimmer {
+  background: linear-gradient(90deg, var(--bg-elevated) 25%, rgba(139,92,246,0.08) 50%, var(--bg-elevated) 75%);
+  background-size: 200% auto;
+  animation: shimmer 1.8s linear infinite;
+}
+
+/* Reduced motion overrides */
+@media (prefers-reduced-motion: reduce) {
+  .waveform-bar, .glow-pulse, .float-anim, .shimmer {
+    animation: none !important;
+  }
+}

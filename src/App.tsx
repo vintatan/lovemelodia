@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AuthGate from "./components/AuthGate.tsx";
 import WizardShell from "./components/wizard/WizardShell.tsx";
+import CreditsModal from "./components/CreditsModal.tsx";
 
 interface AuthState {
   token: string;
@@ -13,6 +14,7 @@ export default function App() {
     const saved = sessionStorage.getItem("kreasi_auth");
     return saved ? JSON.parse(saved) as AuthState : null;
   });
+  const [creditsModalOpen, setCreditsModalOpen] = useState(false);
 
   function handleAuth(token: string, phone: string, credits: number) {
     const state = { token, phone, credits };
@@ -32,15 +34,20 @@ export default function App() {
   }
 
   return (
-    <WizardShell
-      token={auth.token}
-      phone={auth.phone}
-      credits={auth.credits}
-      onCreditsUpdate={updateCredits}
-      onTopUp={() => {
-        // TODO: open credits modal
-        console.log("Top up credits");
-      }}
-    />
+    <>
+      <WizardShell
+        token={auth.token}
+        phone={auth.phone}
+        credits={auth.credits}
+        onCreditsUpdate={updateCredits}
+        onTopUp={() => setCreditsModalOpen(true)}
+      />
+      <CreditsModal
+        open={creditsModalOpen}
+        credits={auth.credits}
+        token={auth.token}
+        onClose={() => setCreditsModalOpen(false)}
+      />
+    </>
   );
 }
