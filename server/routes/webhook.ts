@@ -1,0 +1,37 @@
+import { Router } from "express";
+import { verifyWebhook } from "../lib/airwallex.js";
+import { getTransactionByExternalIdAsync, markPaidAndCredit } from "../lib/db.js";
+import { trackPaymentCompleted } from "../lib/supabase.js";
+
+const router = Router();
+
+router.post("/airwallex", async (req: any, res) => {
+  try {
+    const signature = (req.headers["x-signature"] as string) ?? "";
+    const rawBody = req.rawBody as string;
+    if (!verifyWebhook(signature, rawBody)) {
+      return res.status(401).json({ error: "Invalid webhook signature" });
+    }
+
+    const event = req.body as { name?: string; data?: { merchant_order_id?: string } };
+    if (event.name !== "payment_link.SUCCEEDED") {
+      return res.json({ received: true });
+    }
+
+    const externalId = event.data?.merchant_order_id;
+    if (!externalId) return res.status(400).json({ error: "Missing merchant_order_id" });
+
+    const tx = await getTransactionByExternalIdAsync(externalId);
+    if (!tx) return res.status(404).json({ error: "Transaction not found" });
+
+    const granted = markPaidAndCredit(externalId);
+    if (granted) trackPaymentCompleted(tx as any);
+
+    return res.json({ received: true });
+  } catch (err: any) {
+    console.error("[Webhook] Airwallex error:", err);
+    return res.status(500).json({ error: "Webhook processing failed" });
+  }
+});
+
+export default router;

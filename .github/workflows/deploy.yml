@@ -1,0 +1,66 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE: kreasi-ai
+  REGION: asia-southeast1
+  REGISTRY: asia-southeast1-docker.pkg.dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Build and push image
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image "$IMAGE" \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --timeout 900 \
+            --memory 2Gi \
+            --cpu 2 \
+            --min-instances 0 \
+            --max-instances 10 \
+            --set-env-vars "NODE_ENV=production" \
+            --update-secrets \
+              JWT_SECRET=kreasi-jwt-secret:latest,\
+              FONNTE_API_KEY=fonnte-api-key:latest,\
+              WAVESPEED_API_KEY=wavespeed-api-key:latest,\
+              ANTHROPIC_API_KEY=anthropic-api-key:latest,\
+              SUPABASE_URL=supabase-url:latest,\
+              SUPABASE_SERVICE_KEY=supabase-service-key:latest,\
+              GCS_BUCKET_NAME=kreasi-gcs-bucket:latest,\
+              AIRWALLEX_CLIENT_ID=airwallex-client-id:latest,\
+              AIRWALLEX_API_KEY=airwallex-api-key:latest,\
+              AIRWALLEX_WEBHOOK_SECRET=airwallex-webhook-secret:latest \
+            --quiet
