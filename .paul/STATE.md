@@ -1,17 +1,20 @@
 # STATE.md — Kreasi AI
 
 ## Current Position
-**Loop:** BUILD
-**Phase:** 1.1-scaffold
-**Milestone:** M1 — Foundation
+**Loop:** SHIP
+**Phase:** 3.2-push-pr
+**Milestone:** M1 — Foundation (COMPLETE)
 
 ## Last Action
-Initialized PAUL structure. Ready to scaffold.
+All phases M1 + M2 + M3 complete. Pushed to vintatan/kreasi-ai-v2. CI running (2026-04-28).
 
 ## Active Context
 - Local path: /Users/jesi/imaji/kreasi-app/
-- GitHub: imaji/kreasi-ai (to be created)
-- Plan: /Users/jesi/.claude/plans/create-a-new-github-hashed-snowglobe.md
+- GitHub: https://github.com/vintatan/kreasi-ai-v2
+- Note: imaji org not available for this account — used vintatan/kreasi-ai-v2
+- PR: auto-opened on push to main
 
 ## Blockers
-- WaveSpeed Lyria 3 Pro endpoint needs verification on first run
+- WaveSpeed Lyria 3 Pro endpoint unverified — test with real WAVESPEED_API_KEY on first deploy
+- Deploy CI will fail without GCP secrets (GCP_PROJECT_ID, GCP_WORKLOAD_IDENTITY_PROVIDER, etc.)
+- Need to set secrets in GitHub repo settings before deploy works
