@@ -118,8 +118,8 @@ export async function assembleVideo(params: {
 
       filterParts.push(
         `[${i}:v]` +
-        // Scale to 2× portrait size to give Ken Burns zoom/pan headroom
-        `scale=2160:3840,` +
+        // Scale to 1.6× portrait — minimum headroom for 1.5× max zoom, much faster than 2×
+        `scale=1728:3072,` +
         // Ken Burns: slow zoom + alternating pan direction (portrait output)
         `zoompan=` +
           `z='min(zoom+${speed},1.5)':` +
@@ -194,7 +194,7 @@ export async function assembleVideo(params: {
       "-r", String(fps),
       "-movflags", "+faststart",
       "-y", silentPath,
-    ], { maxBuffer: 100 * 1024 * 1024 });
+    ], { maxBuffer: 100 * 1024 * 1024, timeout: 10 * 60 * 1000 });
 
     // 4. Mix music with fade-out (video stream copied — no re-encode)
     const outputPath = path.join(tmpDir, "final.mp4");
