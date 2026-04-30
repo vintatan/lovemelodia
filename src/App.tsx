@@ -44,7 +44,7 @@ export default function App() {
   }
 
   if (view === "auth") {
-    return <AuthGate onAuth={handleAuth} />;
+    return <AuthGate onAuth={handleAuth} onBack={() => setView("landing")} />;
   }
 
   return <LandingPage onStart={() => setView("auth")} />;

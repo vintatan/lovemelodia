@@ -13,11 +13,10 @@ const PLACEHOLDERS = [
   "R&B smooth buat malam minggu, vokal sensual, synth lembut...",
 ];
 
-interface AudioPlayerProps {
-  audioUrl: string;
-}
+const placeholder = PLACEHOLDERS[Math.floor(Math.random() * PLACEHOLDERS.length)];
 
-function AudioPlayer({ audioUrl }: AudioPlayerProps) {
+/* ── Audio Player ────────────────────────────────────────────────── */
+function AudioPlayer({ audioUrl }: { audioUrl: string }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -26,9 +25,9 @@ function AudioPlayer({ audioUrl }: AudioPlayerProps) {
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
-    const onTime = () => setCurrentTime(a.currentTime);
+    const onTime   = () => setCurrentTime(a.currentTime);
     const onLoaded = () => setDuration(a.duration);
-    const onEnded = () => setPlaying(false);
+    const onEnded  = () => setPlaying(false);
     a.addEventListener("timeupdate", onTime);
     a.addEventListener("loadedmetadata", onLoaded);
     a.addEventListener("ended", onEnded);
@@ -43,7 +42,7 @@ function AudioPlayer({ audioUrl }: AudioPlayerProps) {
     const a = audioRef.current;
     if (!a) return;
     if (playing) { a.pause(); setPlaying(false); }
-    else { a.play(); setPlaying(true); }
+    else { void a.play(); setPlaying(true); }
   }
 
   function seek(e: React.ChangeEvent<HTMLInputElement>) {
@@ -55,62 +54,61 @@ function AudioPlayer({ audioUrl }: AudioPlayerProps) {
   function fmt(s: number) {
     if (!isFinite(s)) return "0:00";
     const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, "0")}`;
+    return `${m}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
   }
 
   return (
-    <div className="card-elevated p-4 space-y-3">
+    <div className="card-glass-red p-4 space-y-3">
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
 
-      {/* Waveform visual */}
-      <div className="flex items-end justify-center gap-0.5 h-10">
-        {Array.from({ length: 40 }, (_, i) => (
+      {/* Fire waveform bars */}
+      <div className="flex items-end justify-center gap-px h-12 px-2">
+        {Array.from({ length: 48 }, (_, i) => (
           <div
             key={i}
-            className="w-1 rounded-full"
+            className={`flex-1 rounded-full ${playing ? "waveform-bar" : ""}`}
             style={{
-              height: `${20 + Math.sin(i * 0.7) * 14 + Math.cos(i * 0.3) * 8}%`,
+              height: `${20 + Math.sin(i * 0.6) * 14 + Math.cos(i * 0.3) * 8}%`,
               background: playing
-                ? `hsl(${260 + i * 2}, 80%, ${55 + Math.sin(i * 0.5) * 15}%)`
-                : "rgba(139,92,246,0.3)",
-              transition: "background 0.3s",
-              animation: playing ? `waveform-bounce ${0.8 + (i % 5) * 0.15}s ease-in-out infinite` : "none",
-              animationDelay: `${i * 0.04}s`,
+                ? `hsl(${350 - i * 1.5}, 88%, ${52 + Math.sin(i * 0.5) * 14}%)`
+                : `rgba(255,45,85,${0.15 + Math.sin(i * 0.4) * 0.1})`,
+              transition: "background 0.35s ease",
+              animationDelay: `${i * 0.038}s`,
             }}
           />
         ))}
       </div>
 
-      {/* Controls */}
+      {/* Transport */}
       <div className="flex items-center gap-3">
         <button
           onClick={togglePlay}
-          className="w-10 h-10 rounded-full bg-gradient-violet flex items-center justify-center shadow-glow flex-shrink-0"
+          className="w-11 h-11 rounded-full bg-gradient-red flex items-center justify-center shadow-glow flex-shrink-0 transition-transform active:scale-90"
           aria-label={playing ? "Pause" : "Play"}
         >
           {playing ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-              <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+              <rect x="6" y="4" width="4" height="16" rx="1.5"/>
+              <rect x="14" y="4" width="4" height="16" rx="1.5"/>
             </svg>
           ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white" style={{ marginLeft: 2 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="white" style={{ marginLeft: 2 }}>
               <polygon points="5,3 19,12 5,21"/>
             </svg>
           )}
         </button>
 
-        <div className="flex-1 space-y-1">
+        <div className="flex-1 space-y-1.5">
           <input
             type="range"
             min={0}
             max={duration || 100}
             value={currentTime}
             onChange={seek}
-            className="w-full accent-[var(--accent-violet)]"
-            style={{ height: 3 }}
+            className="w-full"
+            style={{ accentColor: "var(--accent-red)", height: 3 }}
           />
-          <div className="flex justify-between text-xs text-[var(--text-faint)] font-mono">
+          <div className="flex justify-between text-[11px] text-[var(--text-faint)] font-mono">
             <span>{fmt(currentTime)}</span>
             <span>{fmt(duration)}</span>
           </div>
@@ -120,6 +118,7 @@ function AudioPlayer({ audioUrl }: AudioPlayerProps) {
   );
 }
 
+/* ── Music Creator ───────────────────────────────────────────────── */
 interface MusicCreatorProps {
   token: string;
   credits: number;
@@ -131,30 +130,22 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
   const [prompt, setPrompt] = useState("");
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [phase, setPhase] = useState<"idle" | "generating" | "done" | "error">("idle");
-  const [jobId, setJobId] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const placeholder = PLACEHOLDERS[Math.floor(Math.random() * PLACEHOLDERS.length)];
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
   }, []);
-
   useEffect(() => () => stopPolling(), [stopPolling]);
 
   function toggleGenre(g: string) {
-    setSelectedGenres(prev =>
-      prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]
-    );
+    setSelectedGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
   }
 
   function buildPrompt() {
-    let p = prompt.trim();
-    if (selectedGenres.length > 0) {
-      p = `${selectedGenres.join(", ")} music. ${p}`;
-    }
-    return p;
+    const p = prompt.trim();
+    return selectedGenres.length > 0 ? `${selectedGenres.join(", ")} music. ${p}` : p;
   }
 
   async function handleGenerate() {
@@ -173,7 +164,6 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
       });
       const data = await res.json() as { jobId?: string; creditsRemaining?: number; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Gagal memulai generasi");
-      setJobId(data.jobId!);
       if (data.creditsRemaining !== undefined) onCreditsUpdate(data.creditsRemaining);
       pollStatus(data.jobId!);
     } catch (err: any) {
@@ -190,7 +180,6 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
         if (data.status === "completed" && data.audioUrl) {
           setAudioUrl(data.audioUrl);
           setPhase("done");
-          setJobId(null);
         } else if (data.status === "failed") {
           setPhase("error");
           setErrorMsg(data.error ?? "Generasi musik gagal. Kredit dikembalikan.");
@@ -207,53 +196,61 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
     stopPolling();
     setPhase("idle");
     setAudioUrl(null);
-    setJobId(null);
     setErrorMsg("");
   }
 
   return (
     <div className="max-w-xl mx-auto space-y-6 py-2">
       {/* Header */}
-      <div className="text-center space-y-1">
-        <h2 className="heading-display text-2xl text-gradient">Bikin Musikmu</h2>
-        <p className="text-sm text-[var(--text-muted)]">Tulis vibe lo, Lyria AI yang garap sisanya 🎵</p>
+      <div className="text-center space-y-1.5">
+        <h2 className="heading-display text-gradient-fire" style={{ fontSize: "clamp(1.6rem, 5vw, 2.2rem)" }}>
+          Bikin Musikmu
+        </h2>
+        <p className="text-sm text-[var(--text-muted)]">Tulis vibe lo, AI yang garap sisanya 🎵</p>
       </div>
 
       <AnimatePresence mode="wait">
+
+        {/* ── IDLE / FORM ── */}
         {phase === "idle" && (
-          <motion.div key="form" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
+          <motion.div key="form" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }} className="space-y-5">
+
             {/* Genre chips */}
-            <div className="space-y-2">
-              <label className="text-xs text-[var(--text-faint)] uppercase tracking-widest font-medium">Genre / Vibe</label>
+            <div className="space-y-2.5">
+              <p className="label-caps text-[var(--text-faint)]">Genre / Vibe</p>
               <div className="flex flex-wrap gap-2">
-                {GENRES.map(g => (
-                  <button
-                    key={g}
-                    onClick={() => toggleGenre(g)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                      selectedGenres.includes(g)
-                        ? "bg-[var(--accent-violet)] border-[var(--accent-violet)] text-white shadow-glow"
-                        : "bg-transparent border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-[var(--accent-violet)]/50"
-                    }`}
-                  >
-                    {g}
-                  </button>
-                ))}
+                {GENRES.map(g => {
+                  const active = selectedGenres.includes(g);
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => toggleGenre(g)}
+                      className="px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200"
+                      style={active
+                        ? { background: "var(--accent-red)", borderColor: "var(--accent-red)", color: "#fff", boxShadow: "0 0 12px rgba(255,45,85,0.35)" }
+                        : { background: "transparent", borderColor: "var(--border-subtle)", color: "var(--text-muted)" }
+                      }
+                    >
+                      {g}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Prompt */}
             <div className="space-y-2">
-              <label className="text-xs text-[var(--text-faint)] uppercase tracking-widest font-medium">
-                Deskripsiin musikmu
-              </label>
+              <p className="label-caps text-[var(--text-faint)]">Deskripsiin musikmu</p>
               <textarea
                 value={prompt}
                 onChange={e => setPrompt(e.target.value)}
                 placeholder={placeholder}
                 rows={4}
                 maxLength={450}
-                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-faint)] resize-none focus:outline-none focus:border-[var(--accent-violet)]/50 transition-colors"
+                className="w-full card-elevated px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-faint)] resize-none focus:outline-none transition-colors"
+                style={{ borderRadius: "1rem" }}
+                onFocus={e => (e.target.style.borderColor = "rgba(255,45,85,0.35)")}
+                onBlur={e => (e.target.style.borderColor = "")}
               />
               <div className="flex justify-between text-xs text-[var(--text-faint)]">
                 <span>Makin detail makin gokil hasilnya ✨</span>
@@ -261,24 +258,25 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
               </div>
             </div>
 
-            {/* Credit info */}
-            <div className="flex items-center justify-between text-xs text-[var(--text-muted)] px-1">
-              <span>Biaya: <span className="text-[var(--accent-violet)] font-semibold">10 kredit</span></span>
-              <span>Saldo: <span className={credits < 10 ? "text-red-400" : "text-[var(--text-primary)]"}>{credits} kredit</span></span>
+            {/* Credit info row */}
+            <div className="flex items-center justify-between text-xs px-0.5">
+              <span className="text-[var(--text-muted)]">
+                Biaya: <span className="font-bold" style={{ color: "var(--accent-red)" }}>10 kredit</span>
+              </span>
+              <span className="text-[var(--text-muted)]">
+                Saldo: <span className={credits < 10 ? "text-red-400 font-bold" : "text-[var(--text-primary)] font-medium"}>{credits} kredit</span>
+              </span>
             </div>
 
             {credits < 10 ? (
-              <button
-                onClick={onTopUp}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold text-sm shadow-glow"
-              >
+              <button onClick={onTopUp} className="w-full py-3.5 rounded-2xl text-white font-bold text-sm bg-gradient-warm shadow-glow-amber">
                 Top Up Kredit dulu yuk 🪙
               </button>
             ) : (
               <button
                 onClick={handleGenerate}
                 disabled={!buildPrompt()}
-                className="w-full py-3.5 rounded-xl bg-gradient-violet text-white font-semibold text-sm shadow-glow disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                className="btn-primary w-full rounded-2xl py-4 text-sm"
               >
                 Gas Bikin Musik 🎵
               </button>
@@ -286,41 +284,49 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
           </motion.div>
         )}
 
+        {/* ── GENERATING ── */}
         {phase === "generating" && (
-          <motion.div key="loading" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="text-center space-y-6 py-8">
-            {/* Waveform animation */}
-            <div className="flex items-end justify-center gap-1 h-16">
-              {Array.from({ length: 20 }, (_, i) => (
+          <motion.div key="loading" initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }} className="text-center space-y-7 py-10">
+            {/* Fire waveform loader */}
+            <div className="flex items-end justify-center gap-0.5 h-20">
+              {Array.from({ length: 28 }, (_, i) => (
                 <div
                   key={i}
-                  className="w-1.5 rounded-full waveform-bar"
+                  className="w-2 rounded-full waveform-bar"
                   style={{
-                    height: `${30 + Math.sin(i * 0.8) * 20}%`,
-                    background: `hsl(${260 + i * 5}, 80%, 65%)`,
-                    animationDelay: `${i * 0.08}s`,
+                    height: `${28 + Math.sin(i * 0.7) * 18}%`,
+                    background: `hsl(${350 - i * 3}, 90%, ${55 + Math.sin(i * 0.6) * 12}%)`,
+                    animationDelay: `${i * 0.07}s`,
                   }}
                 />
               ))}
             </div>
+
             <div className="space-y-2">
-              <p className="text-[var(--text-primary)] font-semibold">Lyria AI lagi garap musikmu...</p>
+              <p className="font-bold text-[var(--text-primary)] text-base">AI lagi garap musikmu...</p>
               <p className="text-sm text-[var(--text-muted)]">Biasanya butuh 1–2 menit. Tenang aja ya 🎧</p>
             </div>
-            <div className="flex justify-center gap-1">
+
+            {/* Bouncing dots */}
+            <div className="flex justify-center gap-1.5">
               {[0, 1, 2].map(i => (
-                <div key={i} className="w-2 h-2 rounded-full bg-[var(--accent-violet)]"
-                  style={{ animation: `waveform-bounce 1s ease-in-out infinite`, animationDelay: `${i * 0.2}s` }} />
+                <div
+                  key={i}
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: "var(--accent-red)", animation: "waveform-bounce 1s ease-in-out infinite", animationDelay: `${i * 0.18}s` }}
+                />
               ))}
             </div>
           </motion.div>
         )}
 
+        {/* ── DONE ── */}
         {phase === "done" && audioUrl && (
-          <motion.div key="done" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-            <div className="text-center">
-              <div className="text-3xl mb-2">🎉</div>
-              <p className="font-semibold text-[var(--text-primary)]">Musikmu udah jadi!</p>
-              <p className="text-sm text-[var(--text-muted)] mt-1">Gokil kan? Sekarang dengerin & share! 🔥</p>
+          <motion.div key="done" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }} className="space-y-5">
+            <div className="text-center space-y-1">
+              <div className="text-4xl spring-in">🎉</div>
+              <p className="font-bold text-[var(--text-primary)] mt-2">Musikmu udah jadi!</p>
+              <p className="text-sm text-[var(--text-muted)]">Gokil kan? Sekarang dengerin & share! 🔥</p>
             </div>
 
             <AudioPlayer audioUrl={audioUrl} />
@@ -332,36 +338,35 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
               download="kreasi-ai-musik.wav"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-sm font-medium text-[var(--text-primary)] hover:border-[var(--accent-violet)]/50 transition-colors"
+              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl card-glass-green text-sm font-semibold transition-all hover:scale-[1.01] active:scale-[0.98]"
+              style={{ color: "var(--accent-green)" }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
               Download Musik
             </a>
 
-            <button
-              onClick={handleReset}
-              className="w-full py-3 rounded-xl text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-            >
+            <button onClick={handleReset} className="w-full py-3 rounded-2xl text-sm text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors">
               Bikin lagu baru lagi →
             </button>
           </motion.div>
         )}
 
+        {/* ── ERROR ── */}
         {phase === "error" && (
-          <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center space-y-4 py-8">
-            <div className="text-3xl">😓</div>
-            <p className="font-semibold text-red-400">Ada yang error nih</p>
+          <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center space-y-4 py-10">
+            <div className="text-4xl">😓</div>
+            <p className="font-bold text-red-400">Ada yang error nih</p>
             <p className="text-sm text-[var(--text-muted)]">{errorMsg || "Coba lagi ya, kredit udah dikembalikan."}</p>
-            <button
-              onClick={handleReset}
-              className="px-6 py-2.5 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-sm font-medium"
-            >
+            <button onClick={handleReset} className="px-6 py-2.5 rounded-xl card-elevated text-sm font-medium">
               Coba Lagi
             </button>
           </motion.div>
         )}
+
       </AnimatePresence>
     </div>
   );
