@@ -271,6 +271,23 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
     }, 3000);
   }
 
+  async function handleDownload(url: string) {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = "kreasi-ai-musik.wav";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, "_blank");
+    }
+  }
+
   function handleReset() {
     stopPolling();
     setPhase("idle");
@@ -475,11 +492,8 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
 
             <ShareButtons audioUrl={audioUrl} />
 
-            <a
-              href={audioUrl}
-              download="kreasi-ai-musik.wav"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => void handleDownload(audioUrl)}
               className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl card-glass-green text-sm font-semibold transition-all hover:scale-[1.01] active:scale-[0.98]"
               style={{ color: "var(--accent-green)" }}
             >
@@ -489,7 +503,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
               Download Musik
-            </a>
+            </button>
 
             <button onClick={handleReset} className="w-full py-3 rounded-2xl text-sm text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors">
               Bikin lagu baru lagi →
