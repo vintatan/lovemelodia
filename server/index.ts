@@ -12,6 +12,7 @@ import stage1Router from "./routes/stage1.js";
 import stage2Router from "./routes/stage2.js";
 import stage3Router from "./routes/stage3.js";
 import musicRouter from "./routes/music.js";
+import novelRouter from "./routes/novel.js";
 import { requireAuth } from "./middleware/auth.js";
 import { getStaleAssemblyJobs, addCreditsAsync } from "./lib/db.js";
 
@@ -66,6 +67,7 @@ app.use("/api/stage1", requireAuth, stage1Router);
 app.use("/api/stage2", requireAuth, stage2Router);
 app.use("/api/stage3", requireAuth, stage3Router);
 app.use("/api/music", requireAuth, musicRouter);
+app.use("/api/novel", requireAuth, novelRouter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

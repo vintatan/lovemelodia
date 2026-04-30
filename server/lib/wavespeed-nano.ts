@@ -10,10 +10,13 @@ async function wavespeedPost(endpoint: string, body: Record<string, unknown>, ap
     body: JSON.stringify(body),
   });
 
-  const data = await res.json() as {
-    data?: { status?: string; outputs?: string[]; error?: string; urls?: { get?: string } };
-    code?: number; message?: string; detail?: string;
-  };
+  const raw = await res.text();
+  let data: { data?: { status?: string; outputs?: string[]; error?: string; urls?: { get?: string } }; code?: number; message?: string; detail?: string };
+  try { data = JSON.parse(raw); } catch { throw new Error(`WaveSpeed non-JSON response (${res.status}): ${raw.slice(0, 300)}`); }
+
+  if (!res.ok || data.code === 400 || data.code === 401 || data.code === 403) {
+    throw new Error(`WaveSpeed error (${res.status}): ${data.message ?? data.detail ?? raw.slice(0, 300)}`);
+  }
 
   if (data.data?.status === "completed") {
     const url = data.data.outputs?.[0];
@@ -23,7 +26,7 @@ async function wavespeedPost(endpoint: string, body: Record<string, unknown>, ap
 
   const pollUrl = data.data?.urls?.get;
   if (!pollUrl) {
-    throw new Error(`Submit failed: ${data.message ?? data.detail ?? JSON.stringify(data)}`);
+    throw new Error(`Submit failed: ${data.message ?? data.detail ?? raw.slice(0, 300)}`);
   }
 
   for (let i = 0; i < 40; i++) {
@@ -53,13 +56,13 @@ export async function generateCharacterPortrait(characterPrompt: string): Promis
   }, apiKey);
 }
 
-export async function generateNanoBananaImage(prompt: string, characterImageBase64: string): Promise<string> {
+export async function generateNanoBananaImage(prompt: string, characterImageUrl: string): Promise<string> {
   const apiKey = process.env.WAVESPEED_API_KEY;
   if (!apiKey) throw new Error("WAVESPEED_API_KEY not set");
 
   return wavespeedPost(EDIT_ENDPOINT, {
     prompt: `Image 1 is the character reference: preserve their face, hair, skin tone, and outfit exactly across all scenes. ${prompt}, photorealistic, beautiful, cinematic lighting, high quality, 8k`,
-    images: [`data:image/jpeg;base64,${characterImageBase64}`],
+    images: [characterImageUrl],
     size: "1280*720",
     enable_sync_mode: true,
   }, apiKey);

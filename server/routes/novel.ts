@@ -8,7 +8,7 @@ import {
 } from "../lib/db.js";
 import { generateStoryboardImagePrompts, generateEnhancedPromptWithTimepoints, generateCharacterDescription } from "../lib/anthropic.js";
 import { generateNanoBananaImage, generateCharacterPortrait } from "../lib/wavespeed-nano.js";
-import { uploadUrlToGcs, uploadToGcs } from "../lib/gcs.js";
+import { uploadUrlToGcs, uploadToGcs } from "../lib/gcs.js"; // uploadToGcs needed for user-uploaded char
 import { assembleVideo, cleanupTmpDir } from "../lib/ffmpeg.js";
 import { createNovelJobInSupabase, updateNovelJobInSupabase } from "../lib/supabase.js";
 import { logCost, calculateClaudeCost } from "../lib/cost-logger.js";
@@ -111,8 +111,13 @@ router.post("/generate", async (req, res) => {
       }
 
       // Resolve or auto-generate the character reference image
-      let charBase64 = characterImageBase64 ?? null;
-      if (!charBase64) {
+      // IMPORTANT: must be a publicly accessible URL — Seedream fetches it server-side.
+      // WaveSpeed CDN URLs are always public. GCS bucket is private so we never pass GCS URLs here.
+      let charImageUrl: string;
+      if (characterImageBase64) {
+        // User-uploaded photo — send as base64 data URI (Seedream accepts this)
+        charImageUrl = `data:image/jpeg;base64,${characterImageBase64}`;
+      } else {
         const charDesc = await generateCharacterDescription({
           songTitle,
           songDescription,
@@ -120,12 +125,10 @@ router.post("/generate", async (req, res) => {
           genres: [],
         });
         logCost({ phone, service: "claude", operation: "generateCharacterDescription", costUsd: calculateClaudeCost("claude-haiku-4-5-20251001", 350, 80) });
-        const charUrl = await generateCharacterPortrait(charDesc);
-        const charGcsUrl = await uploadUrlToGcs(charUrl, "image/jpeg", "novels/characters", phone);
-        const finalCharUrl = charGcsUrl ?? charUrl;
-        const charRes = await fetch(finalCharUrl);
-        const charBuf = await charRes.arrayBuffer();
-        charBase64 = Buffer.from(charBuf).toString("base64");
+        // Use the WaveSpeed CDN URL directly — public and immediately accessible
+        charImageUrl = await generateCharacterPortrait(charDesc);
+        // Store a copy in GCS for our records (fire-and-forget, don't use the GCS URL for Seedream)
+        void uploadUrlToGcs(charImageUrl, "image/jpeg", "novels/characters", phone);
       }
 
       // One cinematic image prompt per timepoint — grounded in song title + description
@@ -147,7 +150,7 @@ router.post("/generate", async (req, res) => {
       const tasks = timepointsRaw.map((_, i) => async () => {
         const rawUrl = await generateNanoBananaImage(
           prompts[i] ?? "cinematic landscape, beautiful, photorealistic, atmospheric lighting",
-          charBase64!,
+          charImageUrl,
         );
         const gcsUrl = await uploadUrlToGcs(rawUrl, "image/jpeg", "novels/images", phone);
         const url = gcsUrl ?? rawUrl;
