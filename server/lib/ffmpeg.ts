@@ -132,10 +132,6 @@ export async function assembleVideo(params: {
         `setsar=1,` +
         // Mood-based color grade (curves + saturation/contrast)
         `${moodColorGrade(tp.mood)},` +
-        // Micro-contrast / depth (luma only, no chroma sharpen)
-        `unsharp=lx=5:ly=5:la=0.4:ca=0,` +
-        // Luma-only film grain (temporal — changes per frame for organic feel)
-        `noise=c0s=5:c0f=t+u,` +
         // Vignette: darken edges for cinematic depth
         `vignette=PI/4.5` +
         `[v${i}]`
@@ -188,9 +184,8 @@ export async function assembleVideo(params: {
       ...inputs,
       "-filter_complex", filterParts.join(";"),
       "-map", "[vfinal]",
-      "-c:v", "libx264",
-      "-preset", "fast",
-      "-crf", "20",
+      "-c:v", "h264_videotoolbox",
+      "-b:v", "4000k",
       "-r", String(fps),
       "-movflags", "+faststart",
       "-y", silentPath,
