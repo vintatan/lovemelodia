@@ -8,7 +8,7 @@ import { apiFetch } from "../../../lib/api.ts";
 type AssemblyStatus = "generating_music" | "assembling_video" | "uploading" | "completed" | "failed";
 
 const STAGE_LABELS: Record<AssemblyStatus, string> = {
-  generating_music: "Composing with Lyria 3 Pro…",
+  generating_music: "Composing with proprietary model…",
   assembling_video: "Assembling cinematic scenes…",
   uploading:        "Uploading your music video…",
   completed:        "Your music video is ready!",

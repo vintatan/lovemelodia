@@ -99,17 +99,40 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS music_jobs (
-    id           TEXT PRIMARY KEY,
-    phone        TEXT NOT NULL,
-    prompt       TEXT NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'pending',
-    audio_url    TEXT,
-    error        TEXT,
-    credits_used INTEGER NOT NULL DEFAULT 10,
-    created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+    id               TEXT PRIMARY KEY,
+    phone            TEXT NOT NULL,
+    prompt           TEXT NOT NULL,
+    enhanced_prompt  TEXT,
+    timepoints_json  TEXT,
+    status           TEXT NOT NULL DEFAULT 'pending',
+    audio_url        TEXT,
+    error            TEXT,
+    credits_used     INTEGER NOT NULL DEFAULT 10,
+    created_at       INTEGER NOT NULL DEFAULT (unixepoch())
   );
   CREATE INDEX IF NOT EXISTS idx_music_jobs_phone ON music_jobs(phone);
+
+  CREATE TABLE IF NOT EXISTS novel_jobs (
+    id               TEXT PRIMARY KEY,
+    music_job_id     TEXT NOT NULL,
+    phone            TEXT NOT NULL,
+    status           TEXT NOT NULL DEFAULT 'pending',
+    image_urls_json  TEXT,
+    timepoints_json  TEXT,
+    video_url        TEXT,
+    error            TEXT,
+    credits_used     INTEGER NOT NULL DEFAULT 50,
+    created_at       INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+  CREATE INDEX IF NOT EXISTS idx_novel_jobs_phone ON novel_jobs(phone);
 `);
+
+// ── Migrations ────────────────────────────────────────────────────────────────
+try { db.exec("ALTER TABLE music_jobs ADD COLUMN enhanced_prompt TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE music_jobs ADD COLUMN timepoints_json TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE novel_jobs ADD COLUMN timepoints_json TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE music_jobs ADD COLUMN title TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE music_jobs ADD COLUMN lyrics TEXT"); } catch { /* already exists */ }
 
 // ── Prepared statements ───────────────────────────────────────────────────────
 
@@ -142,9 +165,18 @@ const stmts = {
   updateAssemblyJob: db.prepare("UPDATE assembly_jobs SET status = ?, music_url = ?, video_url = ?, error = ? WHERE id = ?"),
   staleAssemblyJobs: db.prepare("SELECT * FROM assembly_jobs WHERE status NOT IN ('completed','failed') AND created_at < ?"),
 
-  insertMusicJob: db.prepare("INSERT INTO music_jobs (id, phone, prompt) VALUES (?, ?, ?)"),
-  getMusicJob:    db.prepare("SELECT * FROM music_jobs WHERE id = ?"),
-  updateMusicJob: db.prepare("UPDATE music_jobs SET status = ?, audio_url = ?, error = ? WHERE id = ?"),
+  insertMusicJob:        db.prepare("INSERT INTO music_jobs (id, phone, prompt, title, enhanced_prompt, timepoints_json, lyrics) VALUES (?, ?, ?, ?, ?, ?, ?)"),
+  getMusicJob:           db.prepare("SELECT * FROM music_jobs WHERE id = ?"),
+  updateMusicJob:        db.prepare("UPDATE music_jobs SET status = ?, audio_url = ?, error = ?, enhanced_prompt = COALESCE(?, enhanced_prompt), timepoints_json = COALESCE(?, timepoints_json), lyrics = COALESCE(?, lyrics) WHERE id = ?"),
+  renameMusicJob:        db.prepare("UPDATE music_jobs SET title = ? WHERE id = ? AND phone = ?"),
+  getMusicJobsByPhone:   db.prepare("SELECT id, title, prompt, enhanced_prompt, timepoints_json, lyrics, status, audio_url, error, credits_used, created_at FROM music_jobs WHERE phone = ? ORDER BY created_at DESC LIMIT 50"),
+
+  insertNovelJob:        db.prepare("INSERT INTO novel_jobs (id, music_job_id, phone) VALUES (?, ?, ?)"),
+  getNovelJob:           db.prepare("SELECT * FROM novel_jobs WHERE id = ?"),
+  updateNovelJob:        db.prepare("UPDATE novel_jobs SET status = ?, image_urls_json = COALESCE(?, image_urls_json), timepoints_json = COALESCE(?, timepoints_json), video_url = COALESCE(?, video_url), error = COALESCE(?, error) WHERE id = ?"),
+  getNovelJobsByPhone:   db.prepare("SELECT * FROM novel_jobs WHERE phone = ? ORDER BY created_at DESC LIMIT 20"),
+  getLatestNovelJobWithImages: db.prepare("SELECT * FROM novel_jobs WHERE music_job_id = ? AND phone = ? AND image_urls_json IS NOT NULL AND status IN ('awaiting_approval','assembling','uploading','completed') ORDER BY created_at DESC LIMIT 1"),
+  getNovelSummariesForPhone:  db.prepare("SELECT id, music_job_id, status, image_urls_json, video_url FROM novel_jobs WHERE phone = ? AND image_urls_json IS NOT NULL GROUP BY music_job_id HAVING created_at = MAX(created_at)"),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -422,19 +454,95 @@ export function getStaleAssemblyJobs(olderThanUnix: number) {
 
 // ── Music jobs ────────────────────────────────────────────────────────────────
 
-export function createMusicJob(id: string, phone: string, prompt: string): void {
-  stmts.insertMusicJob.run(id, phone, prompt);
+export function createMusicJob(id: string, phone: string, prompt: string, title?: string, enhancedPrompt?: string, timepointsJson?: string, lyrics?: string): void {
+  stmts.insertMusicJob.run(id, phone, prompt, title ?? null, enhancedPrompt ?? null, timepointsJson ?? null, lyrics ?? null);
 }
 
 export function getMusicJob(id: string) {
   return stmts.getMusicJob.get(id) as {
-    id: string; phone: string; prompt: string;
-    status: string; audio_url: string | null; error: string | null; credits_used: number;
+    id: string; phone: string; prompt: string; title: string | null;
+    enhanced_prompt: string | null; timepoints_json: string | null;
+    lyrics: string | null; status: string;
+    audio_url: string | null; error: string | null; credits_used: number;
   } | undefined;
 }
 
-export function updateMusicJob(id: string, status: string, audioUrl?: string, error?: string): void {
-  stmts.updateMusicJob.run(status, audioUrl ?? null, error ?? null, id);
+export function renameMusicJob(id: string, phone: string, title: string): boolean {
+  return stmts.renameMusicJob.run(title, id, phone).changes > 0;
+}
+
+export function updateMusicJob(id: string, status: string, audioUrl?: string, error?: string, enhancedPrompt?: string, timepointsJson?: string, lyrics?: string): void {
+  stmts.updateMusicJob.run(status, audioUrl ?? null, error ?? null, enhancedPrompt ?? null, timepointsJson ?? null, lyrics ?? null, id);
+}
+
+export function getMusicJobsByPhone(phone: string) {
+  return stmts.getMusicJobsByPhone.all(phone) as Array<{
+    id: string; title: string | null; prompt: string; enhanced_prompt: string | null;
+    timepoints_json: string | null; lyrics: string | null; status: string;
+    audio_url: string | null; error: string | null; credits_used: number; created_at: number;
+  }>;
+}
+
+// ── Novel jobs ────────────────────────────────────────────────────────────────
+
+export function createNovelJob(id: string, musicJobId: string, phone: string): void {
+  stmts.insertNovelJob.run(id, musicJobId, phone);
+}
+
+export function getNovelJob(id: string) {
+  return stmts.getNovelJob.get(id) as {
+    id: string; music_job_id: string; phone: string; status: string;
+    image_urls_json: string | null; timepoints_json: string | null;
+    video_url: string | null; error: string | null;
+    credits_used: number; created_at: number;
+  } | undefined;
+}
+
+export function updateNovelJob(
+  id: string,
+  status: string,
+  imageUrls?: string[] | null,
+  timepointsJson?: string | null,
+  videoUrl?: string | null,
+  error?: string | null,
+): void {
+  stmts.updateNovelJob.run(
+    status,
+    imageUrls !== undefined ? JSON.stringify(imageUrls) : null,
+    timepointsJson ?? null,
+    videoUrl ?? null,
+    error ?? null,
+    id,
+  );
+}
+
+export function getNovelSummariesForPhone(phone: string): Record<string, { status: string; imageCount: number; videoUrl: string | null; novelJobId: string | null }> {
+  const rows = stmts.getNovelSummariesForPhone.all(phone) as Array<{
+    id: string; music_job_id: string; status: string; image_urls_json: string | null; video_url: string | null;
+  }>;
+  const map: Record<string, { status: string; imageCount: number; videoUrl: string | null; novelJobId: string | null }> = {};
+  for (const r of rows) {
+    const images = r.image_urls_json ? (JSON.parse(r.image_urls_json) as string[]) : [];
+    map[r.music_job_id] = { status: r.status, imageCount: images.length, videoUrl: r.video_url, novelJobId: r.id };
+  }
+  return map;
+}
+
+export function getLatestNovelJobWithImages(musicJobId: string, phone: string) {
+  return stmts.getLatestNovelJobWithImages.get(musicJobId, phone) as {
+    id: string; music_job_id: string; phone: string; status: string;
+    image_urls_json: string | null; timepoints_json: string | null;
+    video_url: string | null; error: string | null;
+    credits_used: number; created_at: number;
+  } | undefined;
+}
+
+export function getNovelJobsByPhone(phone: string) {
+  return stmts.getNovelJobsByPhone.all(phone) as Array<{
+    id: string; music_job_id: string; phone: string; status: string;
+    image_urls_json: string | null; video_url: string | null; error: string | null;
+    credits_used: number; created_at: number;
+  }>;
 }
 
 export default db;

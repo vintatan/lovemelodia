@@ -62,7 +62,7 @@ async function runAssembly(params: {
     updateAssemblyJob(assemblyJobId, "generating_music");
     const musicPrompt = project.enhanced_prompt!;
     const musicUrlRaw = await generateMusic(musicPrompt);
-    logCost({ phone, service: "wavespeed", operation: "generateMusic", model: "google/lyria-3-pro", costUsd: calculateLyriaCost() });
+    logCost({ phone, service: "wavespeed", operation: "generateMusic", costUsd: calculateLyriaCost() });
 
     // Upload music to GCS for durability
     const musicGcsUrl = await uploadUrlToGcs(musicUrlRaw, "audio/wav", "music", phone) ?? musicUrlRaw;

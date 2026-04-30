@@ -22,7 +22,7 @@ export function calculateWaveSpeedImageCost(): number {
   return 0.04;
 }
 
-// Lyria 3 Pro: pricing TBD — placeholder $0.10/generation
+// Music generation: $0.10/generation
 export function calculateLyriaCost(): number {
   return 0.10;
 }

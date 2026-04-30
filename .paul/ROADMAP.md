@@ -76,6 +76,29 @@
 - .github/workflows/ci.yml (lint + build + playwright)
 - .github/workflows/deploy.yml (Cloud Run asia-southeast1, --timeout=900 --memory=2Gi)
 
-### Phase 3.2 — Push + PR [ ]
+### Phase 3.2 — Push + PR [x]
 - Push to imaji/kreasi-ai
 - Open pull request
+
+## Milestone 4: Music UX & Persistence
+
+### Phase 4.1 — Fix Music Player [ ]
+- Diagnose audio not playing (CORS on Wavespeed URL, proxy if needed)
+- Verify audioUrl flows correctly from status poll → MusicCreator state → <audio> src
+
+### Phase 4.2 — Indonesian Gen Z Prompt Engineering [ ]
+- Update enhanceMusicPrompt() in server/lib/anthropic.ts
+- System prompt: Indonesian language, Gen Z viral tone, music/song focus only
+- No video language — output is pure music production brief
+
+### Phase 4.3 — Enhance Prompt Button (Frontend) [ ]
+- POST /api/music/enhance-prompt endpoint (new server route)
+- Returns enhanced prompt with dramatic timepoints in Indonesian
+- Add "Perkuat Prompt" button to MusicCreator.tsx
+- Show timepoints preview below textarea before generating
+
+### Phase 4.4 — Supabase Persistence [ ]
+- Ensure SUPABASE_URL + SUPABASE_SERVICE_KEY match jati-ai-space keys
+- Persist music_jobs to Supabase (id, phone, prompt, enhanced_prompt, status, audio_url)
+- Add enhanced_prompt column to music_jobs schema
+- Store enhanced_prompt on job creation; update on completion
