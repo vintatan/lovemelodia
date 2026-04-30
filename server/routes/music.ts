@@ -3,21 +3,51 @@ import { nanoid } from "nanoid";
 import {
   getOrCreateUserAsync, deductCreditsAsync, getCredits,
   createMusicJob, getMusicJob, updateMusicJob, addCreditsAsync,
+  getMusicJobsByPhone,
 } from "../lib/db.js";
 import { generateMusic } from "../lib/lyria.js";
+import { enhanceMusicPrompt, generateEnhancedPromptWithTimepoints } from "../lib/anthropic.js";
+import { logCost, calculateLyriaCost, calculateClaudeCost } from "../lib/cost-logger.js";
 import { generationRateLimit } from "../middleware/rateLimit.js";
+import { createMusicJobInSupabase, updateMusicJobInSupabase } from "../lib/supabase.js";
 
 const router = Router();
 const MUSIC_CREDITS = 10;
 
+router.post("/enhance-prompt", async (req, res) => {
+  const { prompt, genres } = req.body as { prompt?: string; genres?: string[] };
+  if (!prompt?.trim() && (!genres || genres.length === 0)) {
+    return res.status(400).json({ error: "Prompt atau genre wajib diisi" });
+  }
+  try {
+    const { enhancedPrompt, timepoints, inputTokens, outputTokens } = await generateEnhancedPromptWithTimepoints({
+      genres: genres ?? [],
+      userDescription: prompt?.trim() ?? "",
+    });
+    logCost({
+      phone: req.user!.phone,
+      service: "claude",
+      operation: "enhancePromptWithTimepoints",
+      costUsd: calculateClaudeCost("claude-sonnet-4-6", inputTokens, outputTokens),
+      inputTokens,
+      outputTokens,
+    });
+    return res.json({ enhancedPrompt, timepoints });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message ?? "Gagal enhance prompt" });
+  }
+});
+
 router.post("/generate", generationRateLimit, async (req, res) => {
   const phone = req.user!.phone;
-  const { prompt } = req.body as { prompt?: string };
+  const { prompt, genres, enhancedPrompt: clientEnhancedPrompt } = req.body as {
+    prompt?: string; genres?: string[]; enhancedPrompt?: string;
+  };
 
-  if (!prompt?.trim()) {
-    return res.status(400).json({ error: "Prompt musik wajib diisi" });
+  if (!prompt?.trim() && (!genres || genres.length === 0)) {
+    return res.status(400).json({ error: "Prompt atau genre musik wajib diisi" });
   }
-  if (prompt.length > 500) {
+  if (prompt && prompt.length > 500) {
     return res.status(400).json({ error: "Prompt terlalu panjang (maksimal 500 karakter)" });
   }
 
@@ -32,17 +62,37 @@ router.post("/generate", generationRateLimit, async (req, res) => {
   }
 
   const jobId = nanoid();
-  createMusicJob(jobId, phone, prompt.trim());
+  const rawPrompt = prompt?.trim() ?? "";
+  createMusicJob(jobId, phone, rawPrompt || (genres ?? []).join(", "), clientEnhancedPrompt);
+  void createMusicJobInSupabase({ id: jobId, phone, prompt: rawPrompt || (genres ?? []).join(", "), enhanced_prompt: clientEnhancedPrompt });
 
-  // Async generation — don't block the response
   (async () => {
     try {
       updateMusicJob(jobId, "generating");
-      const audioUrl = await generateMusic(prompt.trim());
-      updateMusicJob(jobId, "completed", audioUrl);
+      void updateMusicJobInSupabase(jobId, "generating");
+
+      let enhancedPrompt = clientEnhancedPrompt;
+      if (!enhancedPrompt) {
+        const result = await enhanceMusicPrompt({ genres: genres ?? [], userDescription: rawPrompt });
+        enhancedPrompt = result.enhancedPrompt;
+        logCost({
+          phone,
+          service: "claude",
+          operation: "enhanceMusicPrompt",
+          costUsd: calculateClaudeCost("claude-sonnet-4-6", result.inputTokens, result.outputTokens),
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+        });
+      }
+
+      const audioUrl = await generateMusic(enhancedPrompt);
+      logCost({ phone, service: "wavespeed", operation: "generateMusic", costUsd: calculateLyriaCost() });
+      updateMusicJob(jobId, "completed", audioUrl, undefined, enhancedPrompt);
+      void updateMusicJobInSupabase(jobId, "completed", audioUrl, null, enhancedPrompt);
     } catch (err: any) {
       console.error(`[Music] Job ${jobId} failed:`, err);
       updateMusicJob(jobId, "failed", undefined, err.message ?? "Generasi musik gagal");
+      void updateMusicJobInSupabase(jobId, "failed", null, err.message ?? "Generasi musik gagal");
       await addCreditsAsync(phone, MUSIC_CREDITS, "refund").catch(() => {});
     }
   })();
@@ -64,6 +114,12 @@ router.get("/status/:jobId", async (req, res) => {
     audioUrl: job.audio_url,
     error: job.error,
   });
+});
+
+router.get("/history", (req, res) => {
+  const phone = req.user!.phone;
+  const jobs = getMusicJobsByPhone(phone);
+  return res.json({ jobs });
 });
 
 export default router;

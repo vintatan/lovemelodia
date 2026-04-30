@@ -5,15 +5,16 @@ import ShareButtons from "./ShareButtons.tsx";
 
 const GENRES = ["Pop", "Electronic", "Jazz", "Tradisional", "Rock", "Cinematic", "R&B", "Lo-fi"];
 
-const PLACEHOLDERS = [
-  "Lagu sedih buat mantan, nada melankolis, gitar akustik...",
-  "Beat energik buat konten gym, BPM tinggi, bass yang nendang...",
-  "Musik instrumental santai buat kerja, piano & ambient...",
-  "Gamelan modern campur electronic, vibe festival...",
-  "R&B smooth buat malam minggu, vokal sensual, synth lembut...",
-];
-
-const placeholder = PLACEHOLDERS[Math.floor(Math.random() * PLACEHOLDERS.length)];
+const GENRE_DEFAULTS: Record<string, string> = {
+  "Pop": "Lagu pop yang catchy dan emosional, dengan melodi yang mudah diingat",
+  "Electronic": "Track electronic yang energetik dengan synthesizer yang hypnotic",
+  "Jazz": "Jazz smooth yang hangat dan relaksasi, cocok buat cafe atau malam santai",
+  "Tradisional": "Musik tradisional Indonesia yang kaya dengan nuansa etnik dan gamelan",
+  "Rock": "Rock yang penuh energi dengan gitar distorsi dan beat yang powerful",
+  "Cinematic": "Musik sinematik yang dramatis dan emosional seperti soundtrack film",
+  "R&B": "R&B smooth dengan groove yang sensual dan melodi yang ekspresif",
+  "Lo-fi": "Lo-fi chill yang relaxing dan dreamy, cocok buat kerja atau belajar",
+};
 
 /* ── Audio Player ────────────────────────────────────────────────── */
 function AudioPlayer({ audioUrl }: { audioUrl: string }) {
@@ -21,28 +22,43 @@ function AudioPlayer({ audioUrl }: { audioUrl: string }) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
-    const onTime   = () => setCurrentTime(a.currentTime);
-    const onLoaded = () => setDuration(a.duration);
-    const onEnded  = () => setPlaying(false);
+    a.load();
+    const onTime    = () => setCurrentTime(a.currentTime);
+    const onLoaded  = () => setDuration(a.duration);
+    const onEnded   = () => setPlaying(false);
+    const onError   = () => setLoadError(true);
     a.addEventListener("timeupdate", onTime);
     a.addEventListener("loadedmetadata", onLoaded);
     a.addEventListener("ended", onEnded);
+    a.addEventListener("error", onError);
     return () => {
       a.removeEventListener("timeupdate", onTime);
       a.removeEventListener("loadedmetadata", onLoaded);
       a.removeEventListener("ended", onEnded);
+      a.removeEventListener("error", onError);
     };
-  }, []);
+  }, [audioUrl]);
 
-  function togglePlay() {
+  async function togglePlay() {
     const a = audioRef.current;
     if (!a) return;
-    if (playing) { a.pause(); setPlaying(false); }
-    else { void a.play(); setPlaying(true); }
+    if (playing) {
+      a.pause();
+      setPlaying(false);
+    } else {
+      try {
+        await a.play();
+        setPlaying(true);
+      } catch (err) {
+        console.error("Audio play failed:", err);
+        setLoadError(true);
+      }
+    }
   }
 
   function seek(e: React.ChangeEvent<HTMLInputElement>) {
@@ -57,11 +73,19 @@ function AudioPlayer({ audioUrl }: { audioUrl: string }) {
     return `${m}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
   }
 
+  if (loadError) {
+    return (
+      <div className="card-glass-red p-4 text-center space-y-2">
+        <p className="text-sm text-[var(--text-muted)]">Gagal load audio. Coba download langsung.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="card-glass-red p-4 space-y-3">
-      <audio ref={audioRef} src={audioUrl} preload="metadata" />
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <audio ref={audioRef} src={audioUrl} preload="auto" crossOrigin="anonymous" />
 
-      {/* Fire waveform bars */}
       <div className="flex items-end justify-center gap-px h-12 px-2">
         {Array.from({ length: 48 }, (_, i) => (
           <div
@@ -79,10 +103,9 @@ function AudioPlayer({ audioUrl }: { audioUrl: string }) {
         ))}
       </div>
 
-      {/* Transport */}
       <div className="flex items-center gap-3">
         <button
-          onClick={togglePlay}
+          onClick={() => void togglePlay()}
           className="w-11 h-11 rounded-full bg-gradient-red flex items-center justify-center shadow-glow flex-shrink-0 transition-transform active:scale-90"
           aria-label={playing ? "Pause" : "Play"}
         >
@@ -126,31 +149,85 @@ interface MusicCreatorProps {
   onTopUp: () => void;
 }
 
+interface MusicTimepoint {
+  timestamp: string;
+  label: string;
+  description: string;
+  mood: string;
+}
+
+const MOOD_COLORS: Record<string, string> = {
+  mysterious: "#a78bfa", melancholic: "#60a5fa", tense: "#f97316",
+  euphoric: "#f59e0b", triumphant: "#10b981", dreamy: "#ec4899",
+  playful: "#06b6d4", longing: "#8b5cf6",
+};
+
 export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp }: MusicCreatorProps) {
   const [prompt, setPrompt] = useState("");
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [phase, setPhase] = useState<"idle" | "generating" | "done" | "error">("idle");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [enhancing, setEnhancing] = useState(false);
+  const [enhancedPrompt, setEnhancedPrompt] = useState<string | null>(null);
+  const [timepoints, setTimepoints] = useState<MusicTimepoint[]>([]);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoFilledRef = useRef<string>("");
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
   }, []);
   useEffect(() => () => stopPolling(), [stopPolling]);
 
+  // Auto-fill default prompt when genres change
+  useEffect(() => {
+    const currentIsAutoFill = prompt === autoFilledRef.current;
+    if (!currentIsAutoFill && prompt !== "") return; // user has typed their own text
+
+    if (selectedGenres.length === 0) {
+      autoFilledRef.current = "";
+      if (currentIsAutoFill) setPrompt("");
+      return;
+    }
+
+    let defaultText: string;
+    if (selectedGenres.length === 1) {
+      defaultText = GENRE_DEFAULTS[selectedGenres[0]] ?? "";
+    } else {
+      defaultText = `Perpaduan ${selectedGenres.join(" & ")} yang unik dan berkarakter`;
+    }
+
+    autoFilledRef.current = defaultText;
+    setPrompt(defaultText);
+  }, [selectedGenres]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function toggleGenre(g: string) {
     setSelectedGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
   }
 
-  function buildPrompt() {
-    const p = prompt.trim();
-    return selectedGenres.length > 0 ? `${selectedGenres.join(", ")} music. ${p}` : p;
+  async function handleEnhance() {
+    const rawPrompt = prompt.trim();
+    if (!rawPrompt && selectedGenres.length === 0) return;
+    setEnhancing(true);
+    try {
+      const res = await apiFetch("/api/music/enhance-prompt", token, {
+        method: "POST",
+        body: JSON.stringify({ prompt: rawPrompt, genres: selectedGenres }),
+      });
+      const data = await res.json() as { enhancedPrompt?: string; timepoints?: MusicTimepoint[]; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Gagal enhance prompt");
+      setEnhancedPrompt(data.enhancedPrompt ?? null);
+      setTimepoints(data.timepoints ?? []);
+    } catch (err: any) {
+      console.error("Enhance failed:", err.message);
+    } finally {
+      setEnhancing(false);
+    }
   }
 
   async function handleGenerate() {
-    const finalPrompt = buildPrompt();
-    if (!finalPrompt) return;
+    const finalPrompt = prompt.trim();
+    if (!finalPrompt && selectedGenres.length === 0) return;
     if (credits < 10) { onTopUp(); return; }
 
     setPhase("generating");
@@ -160,7 +237,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
     try {
       const res = await apiFetch("/api/music/generate", token, {
         method: "POST",
-        body: JSON.stringify({ prompt: finalPrompt }),
+        body: JSON.stringify({ prompt: finalPrompt, genres: selectedGenres, enhancedPrompt }),
       });
       const data = await res.json() as { jobId?: string; creditsRemaining?: number; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Gagal memulai generasi");
@@ -197,7 +274,11 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
     setPhase("idle");
     setAudioUrl(null);
     setErrorMsg("");
+    setEnhancedPrompt(null);
+    setTimepoints([]);
   }
+
+  const canGenerate = prompt.trim().length > 0 || selectedGenres.length > 0;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 py-2">
@@ -240,11 +321,20 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
 
             {/* Prompt */}
             <div className="space-y-2">
-              <p className="label-caps text-[var(--text-faint)]">Deskripsiin musikmu</p>
+              <div className="flex items-center justify-between">
+                <p className="label-caps text-[var(--text-faint)]">Deskripsiin musikmu</p>
+                {selectedGenres.length > 0 && prompt === autoFilledRef.current && (
+                  <span className="text-[10px] text-[var(--accent-red)] font-medium">✨ AI-suggested</span>
+                )}
+              </div>
               <textarea
                 value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                placeholder={placeholder}
+                onChange={e => {
+                  setPrompt(e.target.value);
+                  setEnhancedPrompt(null);
+                  setTimepoints([]);
+                }}
+                placeholder="Tulis vibe, suasana, atau cerita di balik musikmu..."
                 rows={4}
                 maxLength={450}
                 className="w-full card-elevated px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-faint)] resize-none focus:outline-none transition-colors"
@@ -252,11 +342,63 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
                 onFocus={e => (e.target.style.borderColor = "rgba(255,45,85,0.35)")}
                 onBlur={e => (e.target.style.borderColor = "")}
               />
-              <div className="flex justify-between text-xs text-[var(--text-faint)]">
-                <span>Makin detail makin gokil hasilnya ✨</span>
-                <span>{prompt.length}/450</span>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  onClick={() => void handleEnhance()}
+                  disabled={enhancing || (!prompt.trim() && selectedGenres.length === 0)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 disabled:opacity-40"
+                  style={{
+                    background: "rgba(255,45,85,0.12)",
+                    color: "var(--accent-red)",
+                    border: "1px solid rgba(255,45,85,0.25)",
+                  }}
+                >
+                  {enhancing ? (
+                    <svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                    </svg>
+                  ) : "✨"}
+                  {enhancing ? "Enhancing..." : "Perkuat Prompt"}
+                </button>
+                <span className="text-xs text-[var(--text-faint)]">{prompt.length}/450</span>
               </div>
             </div>
+
+            {/* Timepoints preview */}
+            <AnimatePresence>
+              {timepoints.length > 0 && (
+                <motion.div
+                  key="timepoints"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  <div className="card-elevated p-3 space-y-2" style={{ borderRadius: "1rem" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--accent-red)" }}>
+                      Alur Dramatik ✨
+                    </p>
+                    <div className="space-y-1.5">
+                      {timepoints.map((tp, i) => (
+                        <div key={i} className="flex items-start gap-2.5">
+                          <span className="text-[10px] font-mono text-[var(--text-faint)] w-8 flex-shrink-0 pt-0.5">{tp.timestamp}</span>
+                          <div className="flex-1 min-w-0">
+                            <span
+                              className="text-[10px] font-bold uppercase mr-1.5"
+                              style={{ color: MOOD_COLORS[tp.mood] ?? "var(--accent-red)" }}
+                            >
+                              {tp.label}
+                            </span>
+                            <span className="text-xs text-[var(--text-muted)]">{tp.description}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Credit info row */}
             <div className="flex items-center justify-between text-xs px-0.5">
@@ -275,7 +417,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
             ) : (
               <button
                 onClick={handleGenerate}
-                disabled={!buildPrompt()}
+                disabled={!canGenerate}
                 className="btn-primary w-full rounded-2xl py-4 text-sm"
               >
                 Gas Bikin Musik 🎵
@@ -287,7 +429,6 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
         {/* ── GENERATING ── */}
         {phase === "generating" && (
           <motion.div key="loading" initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }} className="text-center space-y-7 py-10">
-            {/* Fire waveform loader */}
             <div className="flex items-end justify-center gap-0.5 h-20">
               {Array.from({ length: 28 }, (_, i) => (
                 <div
@@ -304,10 +445,9 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
 
             <div className="space-y-2">
               <p className="font-bold text-[var(--text-primary)] text-base">AI lagi garap musikmu...</p>
-              <p className="text-sm text-[var(--text-muted)]">Biasanya butuh 1–2 menit. Tenang aja ya 🎧</p>
+              <p className="text-sm text-[var(--text-muted)]">Biasanya butuh 2–3 menit. Tenang aja ya 🎧</p>
             </div>
 
-            {/* Bouncing dots */}
             <div className="flex justify-center gap-1.5">
               {[0, 1, 2].map(i => (
                 <div

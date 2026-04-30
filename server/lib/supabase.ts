@@ -92,6 +92,35 @@ export async function recordPromoRedemptionInSupabase(phone: string, code: strin
   }
 }
 
+export async function createMusicJobInSupabase(job: {
+  id: string; phone: string; prompt: string; enhanced_prompt?: string | null;
+}): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from("music_jobs").upsert(
+      { id: job.id, phone: job.phone, prompt: job.prompt,
+        enhanced_prompt: job.enhanced_prompt ?? null,
+        status: "pending", created_at: new Date().toISOString() },
+      { onConflict: "id", ignoreDuplicates: true }
+    );
+  } catch (err) {
+    console.error("[Supabase] createMusicJob error:", err);
+  }
+}
+
+export async function updateMusicJobInSupabase(id: string, status: string, audioUrl?: string | null, error?: string | null, enhancedPrompt?: string | null): Promise<void> {
+  if (!supabase) return;
+  try {
+    const updates: Record<string, unknown> = { status };
+    if (audioUrl !== undefined) updates.audio_url = audioUrl;
+    if (error !== undefined) updates.error = error;
+    if (enhancedPrompt !== undefined) updates.enhanced_prompt = enhancedPrompt;
+    await supabase.from("music_jobs").update(updates).eq("id", id);
+  } catch (err) {
+    console.error("[Supabase] updateMusicJob error:", err);
+  }
+}
+
 export function trackPaymentCompleted(tx: {
   external_id?: string; phone: string; package_name: string;
   credits: number; amount: number; currency: string;

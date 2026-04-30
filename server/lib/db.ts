@@ -99,17 +99,21 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS music_jobs (
-    id           TEXT PRIMARY KEY,
-    phone        TEXT NOT NULL,
-    prompt       TEXT NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'pending',
-    audio_url    TEXT,
-    error        TEXT,
-    credits_used INTEGER NOT NULL DEFAULT 10,
-    created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+    id               TEXT PRIMARY KEY,
+    phone            TEXT NOT NULL,
+    prompt           TEXT NOT NULL,
+    enhanced_prompt  TEXT,
+    status           TEXT NOT NULL DEFAULT 'pending',
+    audio_url        TEXT,
+    error            TEXT,
+    credits_used     INTEGER NOT NULL DEFAULT 10,
+    created_at       INTEGER NOT NULL DEFAULT (unixepoch())
   );
   CREATE INDEX IF NOT EXISTS idx_music_jobs_phone ON music_jobs(phone);
 `);
+
+// ── Migrations ────────────────────────────────────────────────────────────────
+try { db.exec("ALTER TABLE music_jobs ADD COLUMN enhanced_prompt TEXT"); } catch { /* already exists */ }
 
 // ── Prepared statements ───────────────────────────────────────────────────────
 
@@ -142,9 +146,10 @@ const stmts = {
   updateAssemblyJob: db.prepare("UPDATE assembly_jobs SET status = ?, music_url = ?, video_url = ?, error = ? WHERE id = ?"),
   staleAssemblyJobs: db.prepare("SELECT * FROM assembly_jobs WHERE status NOT IN ('completed','failed') AND created_at < ?"),
 
-  insertMusicJob: db.prepare("INSERT INTO music_jobs (id, phone, prompt) VALUES (?, ?, ?)"),
-  getMusicJob:    db.prepare("SELECT * FROM music_jobs WHERE id = ?"),
-  updateMusicJob: db.prepare("UPDATE music_jobs SET status = ?, audio_url = ?, error = ? WHERE id = ?"),
+  insertMusicJob:        db.prepare("INSERT INTO music_jobs (id, phone, prompt, enhanced_prompt) VALUES (?, ?, ?, ?)"),
+  getMusicJob:           db.prepare("SELECT * FROM music_jobs WHERE id = ?"),
+  updateMusicJob:        db.prepare("UPDATE music_jobs SET status = ?, audio_url = ?, error = ?, enhanced_prompt = COALESCE(?, enhanced_prompt) WHERE id = ?"),
+  getMusicJobsByPhone:   db.prepare("SELECT id, prompt, enhanced_prompt, status, audio_url, error, credits_used, created_at FROM music_jobs WHERE phone = ? ORDER BY created_at DESC LIMIT 50"),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -422,19 +427,27 @@ export function getStaleAssemblyJobs(olderThanUnix: number) {
 
 // ── Music jobs ────────────────────────────────────────────────────────────────
 
-export function createMusicJob(id: string, phone: string, prompt: string): void {
-  stmts.insertMusicJob.run(id, phone, prompt);
+export function createMusicJob(id: string, phone: string, prompt: string, enhancedPrompt?: string): void {
+  stmts.insertMusicJob.run(id, phone, prompt, enhancedPrompt ?? null);
 }
 
 export function getMusicJob(id: string) {
   return stmts.getMusicJob.get(id) as {
-    id: string; phone: string; prompt: string;
+    id: string; phone: string; prompt: string; enhanced_prompt: string | null;
     status: string; audio_url: string | null; error: string | null; credits_used: number;
   } | undefined;
 }
 
-export function updateMusicJob(id: string, status: string, audioUrl?: string, error?: string): void {
-  stmts.updateMusicJob.run(status, audioUrl ?? null, error ?? null, id);
+export function updateMusicJob(id: string, status: string, audioUrl?: string, error?: string, enhancedPrompt?: string): void {
+  stmts.updateMusicJob.run(status, audioUrl ?? null, error ?? null, enhancedPrompt ?? null, id);
+}
+
+export function getMusicJobsByPhone(phone: string) {
+  return stmts.getMusicJobsByPhone.all(phone) as Array<{
+    id: string; prompt: string; enhanced_prompt: string | null; status: string;
+    audio_url: string | null; error: string | null;
+    credits_used: number; created_at: number;
+  }>;
 }
 
 export default db;
