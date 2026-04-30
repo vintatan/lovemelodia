@@ -1,15 +1,10 @@
-/**
- * WaveSpeed Lyria 3 Pro music generation.
- * Endpoint follows the same submit-then-poll pattern as other WaveSpeed models.
- */
-
-const LYRIA_ENDPOINT = "https://api.wavespeed.ai/api/v3/google/lyria-3-pro";
+const MUSIC_ENDPOINT = "https://api.wavespeed.ai/api/v3/google/lyria-3-pro/music";
 
 export async function generateMusic(prompt: string): Promise<string> {
   const apiKey = process.env.WAVESPEED_API_KEY;
   if (!apiKey) throw new Error("WAVESPEED_API_KEY not set");
 
-  const submitRes = await fetch(LYRIA_ENDPOINT, {
+  const submitRes = await fetch(MUSIC_ENDPOINT, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -20,7 +15,7 @@ export async function generateMusic(prompt: string): Promise<string> {
 
   if (!submitRes.ok) {
     const text = await submitRes.text();
-    throw new Error(`Lyria 3 Pro submit failed (${submitRes.status}): ${text}`);
+    throw new Error(`Music generation failed (${submitRes.status}): ${text}`);
   }
 
   const submitData = await submitRes.json() as {
@@ -28,17 +23,16 @@ export async function generateMusic(prompt: string): Promise<string> {
     detail?: string;
   };
 
-  // If sync mode returned immediately
   if (submitData.data?.status === "completed") {
     const url = submitData.data.outputs?.[0];
-    if (!url) throw new Error("Lyria 3 Pro completed immediately but no output URL");
+    if (!url) throw new Error("Music generation completed but no output URL found");
     return url;
   }
 
   const taskId = submitData.data?.id;
   const pollUrl = submitData.data?.urls?.get;
   if (!taskId || !pollUrl) {
-    throw new Error(`Lyria 3 Pro submit failed: ${submitData.detail ?? JSON.stringify(submitData)}`);
+    throw new Error(`Music generation failed: ${submitData.detail ?? JSON.stringify(submitData)}`);
   }
 
   // Poll with increasing backoff — music generation takes 60–120s
@@ -49,10 +43,10 @@ export async function generateMusic(prompt: string): Promise<string> {
     const status = pd.data?.status;
     if (status === "completed") {
       const url = pd.data?.outputs?.[0];
-      if (!url) throw new Error("Lyria 3 Pro completed but no output URL");
+      if (!url) throw new Error("Music generation completed but no output URL found");
       return url;
     }
-    if (status === "failed") throw new Error(pd.data?.error ?? "Lyria 3 Pro generation failed");
+    if (status === "failed") throw new Error(pd.data?.error ?? "Music generation failed");
   }
-  throw new Error("Lyria 3 Pro timeout after ~10 minutes");
+  throw new Error("Music generation timed out after ~10 minutes");
 }
