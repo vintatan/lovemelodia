@@ -342,18 +342,14 @@ export async function generateStoryboardImagePrompts(params: {
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
     system: `You are a cinematic storyboard director for music videos optimized for vertical short-form (Reels/TikTok).
-Translate each scene description into an English image prompt DEEPLY TIED to this specific song's world.
-Use the song's key visuals, setting, and theme — every prompt must feel unmistakably from THIS song, not generic.
-Each prompt must be: photorealistic, beautiful, cinematic, 8k, sharp focus, atmospheric, emotionally resonant.
-Always include: specific lighting, color grade, depth of field, location from the song's world.
-The main character will be composited via reference image — describe ENVIRONMENT and MOOD only, not the character's face.
-COMPOSITION RULES — CRITICAL:
-- Portrait 9:16 vertical format
-- Key subject and visual interest centered horizontally AND in the middle-third vertically
-- Avoid placing important elements at extreme top/bottom edges (safe zone for reels crop)
-- Depth: foreground element + mid-ground subject space + atmospheric background
-Safe, clean content only.
-Keep each prompt under 80 words.
+Translate each scene description into an English image prompt grounded in this song's specific world.
+Rules:
+- Describe ENVIRONMENT, MOOD, and ATMOSPHERE only — NOT the character's face or body (reference image handles that)
+- Portrait 9:16 vertical, subject centered in the middle-third, avoid extremes of frame
+- Depth: foreground element + open midground space + atmospheric background
+- Safe, family-friendly content only — no violence, no explicit content, no dark/disturbing imagery
+- Keep prompts simple and clear: location, lighting quality, color mood, time of day
+- Max 60 words per prompt
 Respond ONLY with valid JSON: { "prompts": ["prompt1", "prompt2", ...] }`,
     messages: [{
       role: "user",
@@ -365,7 +361,7 @@ ${genres.length > 0 ? `Genres: ${genres.join(", ")}` : ""}${understandingBlock}$
 Timepoints:
 ${timepoints.map((tp, i) => `${i + 1}. [${tp.timestamp}] ${tp.label} (${tp.mood}): ${tp.description}`).join("\n")}
 
-Generate one English cinematic image prompt per timepoint. Ground each scene in the song's specific world — use the key visuals and setting above. Landscape widescreen, photorealistic, cinematic lighting, 8k.`,
+Generate one English image prompt per timepoint. Ground each scene in this song's world using the key visuals and setting. Keep each prompt simple, safe, and under 60 words. Focus on location, lighting, and mood — not the character's face.`,
     }],
   });
 

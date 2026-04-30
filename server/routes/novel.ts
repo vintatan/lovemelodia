@@ -152,11 +152,15 @@ router.post("/generate", async (req, res) => {
 
       // Generate images with 3-way concurrency; push partial updates as each arrives
       const imageSlots: Array<string | null> = new Array(timepointsRaw.length).fill(null);
-      const tasks = timepointsRaw.map((_, i) => async () => {
-        const rawUrl = await generateNanoBananaImage(
-          prompts[i] ?? "cinematic landscape, beautiful, photorealistic, atmospheric lighting",
-          charImageUrl,
-        );
+      const tasks = timepointsRaw.map((tp, i) => async () => {
+        const fullPrompt = prompts[i] ?? "cinematic scene, atmospheric lighting, photorealistic, beautiful, 8k";
+        console.log(`[Novel] image task ${i} prompt: ${fullPrompt.slice(0, 120)}`);
+        // Retry with a safe fallback if Seedream rejects the detailed prompt
+        const rawUrl = await generateNanoBananaImage(fullPrompt, charImageUrl).catch(async (err) => {
+          console.warn(`[Novel] image task ${i} rejected, retrying with fallback prompt. Error: ${err.message}`);
+          const fallback = `${tp.mood} cinematic scene, ${tp.description.split(",")[0].slice(0, 60)}, atmospheric lighting, photorealistic, 8k`;
+          return generateNanoBananaImage(fallback, charImageUrl);
+        });
         imageSlots[i] = rawUrl;
         const partial = imageSlots.filter(Boolean) as string[];
         updateNovelJob(jobId, "generating_images", partial);
