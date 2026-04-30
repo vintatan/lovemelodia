@@ -278,8 +278,8 @@ ${timepoints.map((tp, i) => `${i + 1}. [${tp.timestamp}] ${tp.label} (${tp.mood}
   const rawText = (msg.content[0] as { text: string }).text.trim();
   const parsed = parseClaudeJson<SongUnderstanding>(rawText, "generateSongUnderstanding returned non-JSON");
   return {
-    singerGender: parsed.singerGender ?? "neutral",
-    characterPortraitPrompt: parsed.characterPortraitPrompt ?? "",
+    singerGender: parsed.singerGender ?? "female",
+    characterPortraitPrompt: parsed.characterPortraitPrompt ?? "photorealistic portrait of a young Indonesian woman, natural lighting, beautiful, 8k, sharp focus",
     keyVisuals: Array.isArray(parsed.keyVisuals) ? parsed.keyVisuals : [],
     setting: parsed.setting ?? "",
     coreTheme: parsed.coreTheme ?? "",

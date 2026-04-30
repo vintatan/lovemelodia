@@ -131,7 +131,7 @@ router.post("/generate", async (req, res) => {
         ? Promise.resolve(`data:image/jpeg;base64,${characterImageBase64}`)
         : generateCharacterPortrait(
             songUnderstanding?.characterPortraitPrompt ||
-            `photorealistic portrait of a young Indonesian person, natural lighting, beautiful, 8k, sharp focus`
+            `photorealistic portrait of a young Indonesian woman, natural lighting, beautiful, 8k, sharp focus`
           );
 
       const storyboardPromise = generateStoryboardImagePrompts({
@@ -312,7 +312,7 @@ router.post("/regenerate-image/:jobId/:index", async (req, res) => {
         }),
         generateCharacterPortrait(
           songUnderstanding?.characterPortraitPrompt ||
-          `photorealistic portrait of a young Indonesian person, natural lighting, beautiful, 8k, sharp focus`
+          `photorealistic portrait of a young Indonesian woman, natural lighting, beautiful, 8k, sharp focus`
         ),
       ]);
 

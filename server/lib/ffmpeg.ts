@@ -47,7 +47,7 @@ function moodColorGrade(mood: string): string {
     case "melancholic":
     case "longing":
       // Cool blue-grey, lifted blacks, desaturated — nostalgic and emotional
-      return "curves=r='0/0 0.5/0.46 1/0.92':g='0/0 0.5/0.50 1/1':b='0/0.03 0.5/0.54 1/1.02',eq=saturation=0.82:contrast=0.97";
+      return "curves=r='0/0 0.5/0.46 1/0.92':g='0/0 0.5/0.50 1/1':b='0/0.03 0.5/0.54 1/1',eq=saturation=0.82:contrast=0.97";
     case "dreamy":
       // Soft, slightly overexposed, warm-cool neutral — ethereal
       return "curves=r='0/0.02 0.5/0.52 1/0.97':g='0/0.01 0.5/0.51 1/0.98':b='0/0.02 0.5/0.53 1/1',eq=saturation=0.88:contrast=0.92:brightness=0.02";
@@ -57,10 +57,10 @@ function moodColorGrade(mood: string): string {
       return "curves=r='0/0 0.5/0.56 1/1':g='0/0 0.5/0.50 1/0.95':b='0/0 0.5/0.43 1/0.82',eq=saturation=1.2:contrast=1.08";
     case "tense":
       // High contrast, cool shadows, desaturated — suspense and dread
-      return "curves=r='0/0 0.3/0.24 0.7/0.76 1/1':g='0/0 0.3/0.27 0.7/0.73 1/0.97':b='0/0 0.3/0.28 0.7/0.72 1/1.04',eq=saturation=0.78:contrast=1.15";
+      return "curves=r='0/0 0.3/0.24 0.7/0.76 1/1':g='0/0 0.3/0.27 0.7/0.73 1/0.97':b='0/0 0.3/0.29 0.7/0.74 1/1',eq=saturation=0.78:contrast=1.15";
     case "mysterious":
       // Deep shadows, teal-orange split, cinematic noir
-      return "curves=r='0/0 0.5/0.51 1/0.98':g='0/0 0.5/0.47 1/0.92':b='0/0.02 0.5/0.52 1/1.04',eq=saturation=0.88:contrast=1.1";
+      return "curves=r='0/0 0.5/0.51 1/0.98':g='0/0 0.5/0.47 1/0.92':b='0/0.02 0.5/0.52 1/1',eq=saturation=0.88:contrast=1.1";
     case "playful":
       // Vibrant, warm, high saturation — bright and energetic
       return "curves=r='0/0 0.5/0.53 1/1':g='0/0 0.5/0.51 1/0.98':b='0/0 0.5/0.47 1/0.90',eq=saturation=1.3:contrast=1.05:brightness=0.02";
