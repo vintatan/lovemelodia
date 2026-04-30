@@ -48,11 +48,11 @@ export async function generateCharacterPortrait(characterPrompt: string): Promis
   if (!apiKey) throw new Error("WAVESPEED_API_KEY not set");
 
   return wavespeedPost(T2I_ENDPOINT, {
-    prompt: `${characterPrompt}, photorealistic portrait, beautiful, sharp focus, natural lighting, high quality, 8k`,
+    prompt: `${characterPrompt}, photorealistic portrait, attractive, striking features, flawless skin, expressive eyes, soft cinematic lighting, shallow depth of field, editorial fashion quality, high quality, 8k`,
     size: "720*1280",
     enable_sync_mode: true,
-    num_inference_steps: 28,
-    guidance_scale: 3.5,
+    num_inference_steps: 35,
+    guidance_scale: 4.0,
   }, apiKey);
 }
 

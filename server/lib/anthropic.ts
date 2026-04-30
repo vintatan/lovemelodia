@@ -253,7 +253,7 @@ Read ALL available information (title, description, production notes, lyrics, ti
 Respond ONLY with valid JSON — no markdown, no explanation:
 {
   "singerGender": "female OR male OR neutral",
-  "characterPortraitPrompt": "max 60 words. Specific Indonesian [gender] person: age, distinctive features, outfit from the song's world, emotional expression. Photorealistic portrait, natural lighting, beautiful, 8k. MUST state gender explicitly.",
+  "characterPortraitPrompt": "max 70 words. Attractive Indonesian [gender], 20s, striking features (smooth skin, expressive eyes, defined jawline or soft feminine face). Outfit, hair, and makeup pulled directly from the song's world and emotional tone. Emotional expression that mirrors the song's core feeling. Photorealistic portrait, soft cinematic lighting, shallow depth of field, beautiful, editorial quality, 8k. MUST state gender explicitly.",
   "keyVisuals": ["3-5 concrete visual elements pulled from the lyrics/narrative — specific objects, locations, actions"],
   "setting": "specific primary environment (e.g. 'rain-soaked Jakarta rooftop at 3am', not just 'city')",
   "coreTheme": "one sentence: what this song is fundamentally about"
@@ -261,7 +261,7 @@ Respond ONLY with valid JSON — no markdown, no explanation:
 
 Rules:
 - singerGender: infer from lyric pronouns, emotional perspective, and narrative voice. Indonesian lyrics: check for feminine/masculine framing.
-- characterPortraitPrompt: reflect the song's specific world. Pull appearance details directly from lyric imagery if available.
+- characterPortraitPrompt: reflect the song's specific world. Pull appearance details (outfit, hair, expression) directly from lyric imagery. The character must feel like they belong in this song's universe — not generic. Always attractive and visually compelling.
 - keyVisuals: be concrete and specific — pull from lyric metaphors, objects, places, and actions named in the song.
 - setting: be evocative and specific, matching the emotional geography of the song.`,
     messages: [{
@@ -279,7 +279,7 @@ ${timepoints.map((tp, i) => `${i + 1}. [${tp.timestamp}] ${tp.label} (${tp.mood}
   const parsed = parseClaudeJson<SongUnderstanding>(rawText, "generateSongUnderstanding returned non-JSON");
   return {
     singerGender: parsed.singerGender ?? "female",
-    characterPortraitPrompt: parsed.characterPortraitPrompt ?? "photorealistic portrait of a young Indonesian woman, natural lighting, beautiful, 8k, sharp focus",
+    characterPortraitPrompt: parsed.characterPortraitPrompt ?? "photorealistic portrait of an attractive young Indonesian woman, 20s, striking features, expressive eyes, soft cinematic lighting, shallow depth of field, beautiful, editorial quality, 8k",
     keyVisuals: Array.isArray(parsed.keyVisuals) ? parsed.keyVisuals : [],
     setting: parsed.setting ?? "",
     coreTheme: parsed.coreTheme ?? "",
