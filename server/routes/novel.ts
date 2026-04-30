@@ -2,10 +2,12 @@ import { Router } from "express";
 import { nanoid } from "nanoid";
 import path from "path";
 import { readFile } from "fs/promises";
+import { Readable } from "stream";
 import {
   getMusicJob, createNovelJob, getNovelJob, updateNovelJob,
   getOrCreateUserAsync, deductCreditsAsync, getCredits, addCreditsAsync,
 } from "../lib/db.js";
+import { verifyToken } from "../lib/otp.js";
 import { generateStoryboardImagePrompts, generateEnhancedPromptWithTimepoints, generateSongUnderstanding } from "../lib/anthropic.js";
 import { generateNanoBananaImage, generateCharacterPortrait } from "../lib/wavespeed-nano.js";
 import { uploadToGcs } from "../lib/gcs.js";
@@ -126,6 +128,11 @@ router.post("/generate", async (req, res) => {
 
       logCost({ phone, service: "claude", operation: "generateSongUnderstanding", costUsd: calculateClaudeCost("claude-haiku-4-5-20251001", 400, 120) });
 
+      // Limit to 3 images: first, middle, last — keeps cost low while covering the full arc
+      const timepoints3 = timepointsRaw.length > 3
+        ? [timepointsRaw[0], timepointsRaw[Math.floor(timepointsRaw.length / 2)], timepointsRaw[timepointsRaw.length - 1]]
+        : timepointsRaw;
+
       // Character portrait: use song understanding's portrait prompt, or fall back to user-uploaded image
       const charImagePromise: Promise<string> = characterImageBase64
         ? Promise.resolve(`data:image/jpeg;base64,${characterImageBase64}`)
@@ -136,7 +143,7 @@ router.post("/generate", async (req, res) => {
 
       const storyboardPromise = generateStoryboardImagePrompts({
         songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
-        timepoints: timepointsRaw, genres: [], lyrics: songLyrics, songUnderstanding,
+        timepoints: timepoints3, genres: [], lyrics: songLyrics, songUnderstanding,
       });
 
       const [charImageUrl, { prompts, inputTokens: pIn, outputTokens: pOut }] = await Promise.all([
@@ -151,8 +158,8 @@ router.post("/generate", async (req, res) => {
       });
 
       // Generate images with 3-way concurrency; push partial updates as each arrives
-      const imageSlots: Array<string | null> = new Array(timepointsRaw.length).fill(null);
-      const tasks = timepointsRaw.map((tp, i) => async () => {
+      const imageSlots: Array<string | null> = new Array(timepoints3.length).fill(null);
+      const tasks = timepoints3.map((tp, i) => async () => {
         const fullPrompt = prompts[i] ?? "cinematic scene, atmospheric lighting, photorealistic, beautiful, 8k";
         console.log(`[Novel] image task ${i} prompt: ${fullPrompt.slice(0, 120)}`);
         // Retry with a safe fallback if Seedream rejects the detailed prompt
@@ -174,7 +181,7 @@ router.post("/generate", async (req, res) => {
       if (validImages.length === 0) throw new Error("Tidak ada gambar yang berhasil dibuat");
 
       // Keep only timepoints whose image succeeded
-      const validTimepoints = timepointsRaw.filter((_, i) => imageSlots[i] !== null);
+      const validTimepoints = timepoints3.filter((_, i) => imageSlots[i] !== null);
 
       // Transition to awaiting_approval — store images + timepoints, no video yet
       const timepointsJson = JSON.stringify(validTimepoints);
@@ -336,3 +343,35 @@ router.post("/regenerate-image/:jobId/:index", async (req, res) => {
 });
 
 export default router;
+
+// ── GET /api/novel/video/:jobId?t=TOKEN ──────────────────────────────────────
+// Registered WITHOUT requireAuth in index.ts — handles its own token check via ?t=
+import type { Request, Response } from "express";
+
+export async function novelVideoProxy(req: Request, res: Response): Promise<void> {
+  const rawToken = typeof req.query.t === "string" ? req.query.t
+    : req.headers.authorization?.replace("Bearer ", "");
+  if (!rawToken) { res.status(401).end(); return; }
+  const decoded = verifyToken(rawToken);
+  if (!decoded) { res.status(401).end(); return; }
+
+  const job = getNovelJob(req.params.jobId);
+  if (!job || job.phone !== decoded.phone) { res.status(404).end(); return; }
+  if (!job.video_url) { res.status(404).end(); return; }
+
+  const fetchHeaders: Record<string, string> = {};
+  if (req.headers.range) fetchHeaders["Range"] = req.headers.range;
+
+  try {
+    const gcsRes = await fetch(job.video_url, { headers: fetchHeaders });
+    res.status(gcsRes.status);
+    for (const h of ["content-type", "content-length", "content-range", "accept-ranges"]) {
+      const v = gcsRes.headers.get(h);
+      if (v) res.setHeader(h, v);
+    }
+    if (!gcsRes.body) { res.end(); return; }
+    Readable.fromWeb(gcsRes.body as Parameters<typeof Readable.fromWeb>[0]).pipe(res);
+  } catch {
+    if (!res.headersSent) res.status(502).end();
+  }
+}

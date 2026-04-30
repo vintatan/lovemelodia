@@ -6,6 +6,7 @@ interface NovelSummary {
   status: string;
   imageCount: number;
   videoUrl: string | null;
+  novelJobId: string | null;
 }
 
 interface MusicJob {
@@ -198,6 +199,58 @@ function InlineRename({ jobId, initialTitle, prompt, token, onSaved }: {
   );
 }
 
+function NovelVideoPreview({ novelJobId, token }: { novelJobId: string; token: string }) {
+  const [open, setOpen] = useState(false);
+  const proxyUrl = `/api/novel/video/${novelJobId}?t=${encodeURIComponent(token)}`;
+
+  async function handleDownload() {
+    try {
+      const res = await fetch(proxyUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "kreasi-ai-novel.mp4";
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch { window.open(proxyUrl, "_blank"); }
+  }
+
+  return (
+    <div className="space-y-2 mt-1">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide transition-opacity hover:opacity-75"
+          style={{ background: "rgba(124,58,237,0.15)", color: "#a78bfa" }}
+        >
+          {open ? "▲ Sembunyikan" : "🎬 Tonton Video"}
+        </button>
+        <button
+          onClick={() => void handleDownload()}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide transition-opacity hover:opacity-75"
+          style={{ background: "rgba(52,199,89,0.12)", color: "var(--accent-green)" }}
+        >
+          ↓ Download
+        </button>
+      </div>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            key="video"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="rounded-xl overflow-hidden bg-black"
+          >
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video src={proxyUrl} controls playsInline autoPlay className="w-full" style={{ maxHeight: "40vh" }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function JobCard({ job: initialJob, token }: { job: MusicJob; token: string }) {
   const [job, setJob] = useState(initialJob);
   return (
@@ -223,19 +276,19 @@ function JobCard({ job: initialJob, token }: { job: MusicJob; token: string }) {
 
       <div className="flex items-center gap-2 flex-wrap">
         <p className="text-[11px] text-[var(--text-faint)]">{formatDate(job.created_at)}</p>
-        {job.novel && (
+        {job.novel && !job.novel.videoUrl && (
           <span
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide"
-            style={
-              job.novel.videoUrl
-                ? { background: "rgba(124,58,237,0.15)", color: "#a78bfa" }
-                : { background: "rgba(255,45,85,0.10)", color: "var(--accent-red)" }
-            }
+            style={{ background: "rgba(255,45,85,0.10)", color: "var(--accent-red)" }}
           >
-            {job.novel.videoUrl ? "🎬 Novel Video" : `🖼️ ${job.novel.imageCount} scenes`}
+            🖼️ {job.novel.imageCount} scenes
           </span>
         )}
       </div>
+
+      {job.novel?.novelJobId && (
+        <NovelVideoPreview novelJobId={job.novel.novelJobId} token={token} />
+      )}
 
       {job.status === "completed" && job.audio_url && (
         <MiniPlayer audioUrl={job.audio_url} />

@@ -62,10 +62,10 @@ export async function generateNanoBananaImage(prompt: string, characterImageUrl:
   if (!apiKey) throw new Error("WAVESPEED_API_KEY not set");
 
   return wavespeedPost(EDIT_ENDPOINT, {
-    prompt: `Image 1 is the character reference: preserve their face, hair, skin tone, and outfit exactly across all scenes. ${prompt}, photorealistic, beautiful, cinematic lighting, high quality, 8k, portrait vertical composition, subject centered`,
+    prompt: `${prompt}, photorealistic, beautiful, surreal, cinematic lighting, high quality, 8k, widescreen landscape 16:9. Image 1 provides a loose character aesthetic reference only`,
     negative_prompt: "nsfw, nudity, nude, naked, sexual, explicit, suggestive, revealing clothing, cleavage, lingerie, violence, blood, gore, weapons, disturbing, horror, scary, dark, ugly, deformed, disfigured, watermark, text",
     images: [characterImageUrl],
-    size: "720*1280",
+    size: "1280*720",
     enable_sync_mode: true,
   }, apiKey);
 }

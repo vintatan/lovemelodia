@@ -88,7 +88,7 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
           setPhase("reviewing");
           stopPolling();
         } else if (data.status === "completed" && data.videoUrl) {
-          setVideoUrl(data.videoUrl);
+          setVideoUrl(`/api/novel/video/${id}?t=${encodeURIComponent(token)}`);
           setPhase("done");
           stopPolling();
         } else if (data.status === "failed") {
@@ -289,7 +289,7 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
             {/* Live storyboard grid — images pop in as they arrive */}
             {imageUrls.length > 0 && (
               <div className="grid grid-cols-3 gap-2">
-                {Array.from({ length: Math.max(6, imageUrls.length) }, (_, i) => {
+                {Array.from({ length: Math.max(3, imageUrls.length) }, (_, i) => {
                   const url = imageUrls[i];
                   return url ? (
                     <motion.div
@@ -312,7 +312,7 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
 
             {imageUrls.length === 0 && (
               <div className="grid grid-cols-3 gap-2">
-                {Array.from({ length: 6 }, (_, i) => (
+                {Array.from({ length: 3 }, (_, i) => (
                   <div key={i} className="aspect-video rounded-xl animate-pulse"
                     style={{ background: "rgba(255,45,85,0.08)", border: "1px solid rgba(255,45,85,0.1)", animationDelay: `${i * 0.1}s` }}
                   />
@@ -427,7 +427,7 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
             {videoUrl && (
               <div className="rounded-2xl overflow-hidden bg-black">
                 {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                <video src={videoUrl} controls playsInline className="w-full" style={{ maxHeight: "50vh" }} />
+                <video src={videoUrl} controls playsInline autoPlay className="w-full" style={{ maxHeight: "50vh" }} />
               </div>
             )}
 

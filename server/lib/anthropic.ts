@@ -351,14 +351,15 @@ export async function generateStoryboardImagePrompts(params: {
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
-    system: `You are a cinematic storyboard director for music videos optimized for vertical short-form (Reels/TikTok).
-Translate each scene description into an English image prompt grounded in this song's specific world.
+    system: `You are a surrealist music video director. Translate each lyric moment into a stunning, photorealistic image prompt.
+
 Rules:
-- Describe ENVIRONMENT, MOOD, and ATMOSPHERE only — NOT the character's face or body (reference image handles that)
-- Portrait 9:16 vertical, subject centered in the middle-third, avoid extremes of frame
-- Depth: foreground element + open midground space + atmospheric background
-- Keep prompts simple and clear: location, lighting quality, color mood, time of day
-- Max 60 words per prompt
+- Landscape 16:9 cinematic widescreen composition
+- Each prompt must be a beautiful, surreal, emotionally resonant scene DIRECTLY inspired by the lyrics at that exact moment
+- Ground scenes in concrete lyric imagery: specific objects, places, metaphors, and actions named in the song
+- Character may appear loosely — as silhouette, back view, partial figure, or purely atmospheric presence — never the main focus
+- Emphasize: dramatic lighting, rich color palette, visual poetry, depth of field, surreal or dreamlike elements that mirror the emotional tone
+- Max 80 words per prompt
 CONTENT SAFETY — ABSOLUTE RULES (never break these, no exceptions):
 - NO sexual content, nudity, revealing clothing, suggestive or intimate scenes
 - NO violence, weapons, blood, gore, fighting, or threatening imagery
@@ -376,7 +377,7 @@ ${genres.length > 0 ? `Genres: ${genres.join(", ")}` : ""}${understandingBlock}$
 Timepoints:
 ${timepoints.map((tp, i) => `${i + 1}. [${tp.timestamp}] ${tp.label} (${tp.mood}): ${tp.description}`).join("\n")}
 
-Generate one English image prompt per timepoint. Ground each scene in this song's world using the key visuals and setting. Keep each prompt simple, safe, and under 60 words. Focus on location, lighting, and mood — not the character's face.`,
+Generate one English image prompt per timepoint. Each scene must be a visual poem for that lyric moment — surreal, beautiful, cinematic. Ground every image in the song's specific imagery and emotional world.`,
     }],
   });
 

@@ -176,7 +176,7 @@ const stmts = {
   updateNovelJob:        db.prepare("UPDATE novel_jobs SET status = ?, image_urls_json = COALESCE(?, image_urls_json), timepoints_json = COALESCE(?, timepoints_json), video_url = COALESCE(?, video_url), error = COALESCE(?, error) WHERE id = ?"),
   getNovelJobsByPhone:   db.prepare("SELECT * FROM novel_jobs WHERE phone = ? ORDER BY created_at DESC LIMIT 20"),
   getLatestNovelJobWithImages: db.prepare("SELECT * FROM novel_jobs WHERE music_job_id = ? AND phone = ? AND image_urls_json IS NOT NULL AND status IN ('awaiting_approval','assembling','uploading','completed') ORDER BY created_at DESC LIMIT 1"),
-  getNovelSummariesForPhone:  db.prepare("SELECT music_job_id, status, image_urls_json, video_url FROM novel_jobs WHERE phone = ? AND image_urls_json IS NOT NULL GROUP BY music_job_id HAVING created_at = MAX(created_at)"),
+  getNovelSummariesForPhone:  db.prepare("SELECT id, music_job_id, status, image_urls_json, video_url FROM novel_jobs WHERE phone = ? AND image_urls_json IS NOT NULL GROUP BY music_job_id HAVING created_at = MAX(created_at)"),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -516,14 +516,14 @@ export function updateNovelJob(
   );
 }
 
-export function getNovelSummariesForPhone(phone: string): Record<string, { status: string; imageCount: number; videoUrl: string | null }> {
+export function getNovelSummariesForPhone(phone: string): Record<string, { status: string; imageCount: number; videoUrl: string | null; novelJobId: string | null }> {
   const rows = stmts.getNovelSummariesForPhone.all(phone) as Array<{
-    music_job_id: string; status: string; image_urls_json: string | null; video_url: string | null;
+    id: string; music_job_id: string; status: string; image_urls_json: string | null; video_url: string | null;
   }>;
-  const map: Record<string, { status: string; imageCount: number; videoUrl: string | null }> = {};
+  const map: Record<string, { status: string; imageCount: number; videoUrl: string | null; novelJobId: string | null }> = {};
   for (const r of rows) {
     const images = r.image_urls_json ? (JSON.parse(r.image_urls_json) as string[]) : [];
-    map[r.music_job_id] = { status: r.status, imageCount: images.length, videoUrl: r.video_url };
+    map[r.music_job_id] = { status: r.status, imageCount: images.length, videoUrl: r.video_url, novelJobId: r.id };
   }
   return map;
 }

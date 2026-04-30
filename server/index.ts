@@ -12,9 +12,10 @@ import stage1Router from "./routes/stage1.js";
 import stage2Router from "./routes/stage2.js";
 import stage3Router from "./routes/stage3.js";
 import musicRouter from "./routes/music.js";
-import novelRouter from "./routes/novel.js";
+import novelRouter, { novelVideoProxy } from "./routes/novel.js";
 import { requireAuth } from "./middleware/auth.js";
 import { getStaleAssemblyJobs, addCreditsAsync } from "./lib/db.js";
+import { ensureBucketPublicAccess } from "./lib/gcs.js";
 
 declare global {
   namespace Express {
@@ -67,6 +68,7 @@ app.use("/api/stage1", requireAuth, stage1Router);
 app.use("/api/stage2", requireAuth, stage2Router);
 app.use("/api/stage3", requireAuth, stage3Router);
 app.use("/api/music", requireAuth, musicRouter);
+app.get("/api/novel/video/:jobId", novelVideoProxy);
 app.use("/api/novel", requireAuth, novelRouter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
@@ -80,9 +82,11 @@ if (isProd) {
   });
 }
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[Kreasi AI] Server running on port ${PORT}`);
 });
+process.on("SIGTERM", () => server.close());
+process.on("SIGINT",  () => server.close());
 
 // Reconcile stale assembly jobs on startup — refund credits for jobs stuck >15 min
 async function reconcileStaleJobs(): Promise<void> {
@@ -97,3 +101,4 @@ async function reconcileStaleJobs(): Promise<void> {
 }
 
 reconcileStaleJobs().catch(err => console.error("[Reconcile] startup error:", err));
+ensureBucketPublicAccess().catch(err => console.error("[GCS] startup error:", err));
