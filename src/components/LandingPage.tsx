@@ -19,14 +19,16 @@ const fadeUp = (delay = 0) => ({
   transition: { duration: 0.55, delay, ease: [0.25, 1, 0.5, 1] as const },
 });
 
-/* Noice Indonesia — eye/oval mark matching their actual logo */
+/* Noice Indonesia — broadcast/signal mark matching their actual logo */
 function NoiceIcon({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Outer eye shape */}
-      <ellipse cx="50" cy="50" rx="38" ry="24" stroke="#1a1a1a" strokeWidth="10" fill="none"/>
-      {/* Pupil */}
-      <circle cx="50" cy="50" r="12" fill="#1a1a1a"/>
+      {/* Outer arc */}
+      <path d="M 28 78 Q 6 50 28 22" stroke="#1a1a1a" strokeWidth="12" strokeLinecap="round" fill="none"/>
+      {/* Middle arc */}
+      <path d="M 44 67 Q 28 50 44 33" stroke="#1a1a1a" strokeWidth="11" strokeLinecap="round" fill="none"/>
+      {/* Inner dot */}
+      <circle cx="60" cy="50" r="7" fill="#1a1a1a"/>
     </svg>
   );
 }
@@ -313,59 +315,6 @@ export default function LandingPage({ onStart }: LandingPageProps) {
               </div>
             </motion.div>
           ))}
-        </div>
-      </section>
-
-      <div className="section-rule mx-5 sm:mx-8 lg:mx-12" />
-
-      {/* ── YouTube ─────────────────────────────────────────────── */}
-      <section className="px-5 sm:px-8 lg:px-12 py-20 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          <motion.div {...fadeUp(0)}>
-            <p className="label-caps mb-2" style={{ color: "var(--accent-amber)" }}>Karya Terbaru</p>
-            <h2 className="heading-display text-[var(--text-primary)]" style={{ fontSize: "clamp(2.4rem, 5vw, 4rem)", letterSpacing: "-0.04em" }}>
-              Ini yang Udah<br />Dibikin. ✨
-            </h2>
-            <p className="text-sm text-[var(--text-muted)] mt-4 leading-relaxed max-w-sm">
-              Bukti nyata AI bisa bikin musik yang beneran bagus. Dengerin sendiri, judging boleh.
-            </p>
-            <a
-              href={YT_CHANNEL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 mt-6 px-5 py-3 rounded-xl text-sm font-semibold transition-all hover:scale-105 active:scale-95"
-              style={{ background: "rgba(255,0,0,0.1)", color: "#ff4444", border: "1px solid rgba(255,0,0,0.2)" }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21.582 7.2s-.21-1.47-.85-2.12c-.81-.85-1.72-.85-2.13-.9C15.97 4 12 4 12 4s-3.97 0-6.6.18c-.41.05-1.32.05-2.13.9-.64.65-.85 2.12-.85 2.12S2.2 8.9 2.2 10.6v1.6c0 1.7.22 3.4.22 3.4s.21 1.47.85 2.12c.81.85 1.88.82 2.35.91C7 18.8 12 18.8 12 18.8s3.97 0 6.6-.18c.41-.05 1.32-.06 2.13-.91.64-.65.85-2.12.85-2.12s.22-1.7.22-3.4v-1.6c0-1.7-.22-3.4-.22-3.4zM9.74 14.85V8.66l5.76 3.1-5.76 3.09z"/>
-              </svg>
-              Tonton Lebih Banyak di YouTube
-            </a>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.55, delay: 0.1, ease: [0.25, 1, 0.5, 1] }}
-            className="card-glass overflow-hidden"
-          >
-            <div className="h-[2px] rainbow-line" />
-            <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-              <iframe
-                src={`https://www.youtube.com/embed/${YT_VIDEO_ID}?rel=0&modestbranding=1`}
-                title="Kreasi AI — Karya Terbaru"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                loading="lazy"
-                className="absolute inset-0 w-full h-full"
-              />
-            </div>
-            <div className="p-4 border-t border-[var(--border-subtle)]">
-              <p className="font-semibold text-[var(--text-primary)] text-sm">Imaji AI</p>
-              <p className="text-xs text-[var(--text-muted)]">Musik AI original Indonesia</p>
-            </div>
-          </motion.div>
         </div>
       </section>
 
