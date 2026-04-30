@@ -203,6 +203,8 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
 
   function toggleGenre(g: string) {
     setSelectedGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
+    setEnhancedPrompt(null);
+    setTimepoints([]);
   }
 
   async function handleEnhance() {

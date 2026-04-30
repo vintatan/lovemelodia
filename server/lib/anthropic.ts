@@ -44,16 +44,17 @@ export async function enhanceMusicPrompt(params: {
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 512,
-    system: `You are a professional music producer creating viral Indonesian Gen Z bangers.
-Transform user input into a music generation prompt that produces a viral, emotionally powerful song.
+    system: `You are a professional music producer creating engaging Indonesian songs.
+Transform user input into a clean, safe music generation prompt suitable for all audiences.
 Rules:
 - Write exactly 2-4 sentences in English (for the music AI model)
-- Optimize for viral Gen Z appeal: catchy hooks, emotional peak moments, trendy production
-- Specify genre, tempo (BPM range), key instruments, emotional arc, production quality
-- Include Indonesian musical flavors when relevant (gamelan textures, dangdut rhythm, keroncong, etc.)
+- Describe genre, tempo (BPM range), key instruments, mood, and production style
+- Include Indonesian musical flavors when relevant (gamelan, angklung, keroncong, dangdut)
 - Always end with "approximately 2 to 3 minutes in duration"
-- Focus ONLY on music and sound — no visual or video descriptions
-- Do not mention any AI model or tool names
+- Focus ONLY on musical elements: instruments, tempo, key, mood, texture, arrangement
+- Use only clean, neutral, family-safe language — no explicit, violent, or sensitive wording
+- Avoid subjective claims like "viral", "banger", "powerful" — describe sound objectively
+- Do not mention any AI model, tool names, or brand names
 Respond with ONLY the prompt text, no explanation or markdown.`,
     messages: [{
       role: "user",
@@ -89,28 +90,28 @@ export async function generateEnhancedPromptWithTimepoints(params: {
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
-    system: `Kamu adalah music director yang ahli bikin lagu viral buat Gen Z Indonesia.
+    system: `Kamu adalah music director yang ahli membuat lagu untuk audiens Indonesia.
 Dari deskripsi vibe pengguna, buat:
-1. Enhanced prompt dalam bahasa Inggris (untuk AI music model) — fokus pada Gen Z viral sound
-2. Dramatic timepoints dalam bahasa Indonesia — momen emosional yang bikin lagu terasa epic
+1. Enhanced prompt dalam bahasa Inggris (untuk AI music model) — deskripsi musikal yang bersih dan netral
+2. Dramatic timepoints dalam bahasa Indonesia — momen struktural lagu yang menarik
 
 Respons HANYA berupa JSON valid (tanpa markdown, tanpa penjelasan lain):
 {
-  "enhancedPrompt": "2-4 kalimat Inggris: genre, BPM, instrumen, mood, production style. Diakhiri dengan 'approximately 2 to 3 minutes in duration'",
+  "enhancedPrompt": "2-4 kalimat Inggris: genre, BPM, instrumen, mood, production style. Gunakan bahasa netral dan aman. Diakhiri dengan 'approximately 2 to 3 minutes in duration'",
   "timepoints": [
     {
       "timestamp": "0:00",
       "label": "Intro",
-      "description": "deskripsi momen dalam bahasa Indonesia Gen Z yang vivid dan emosional",
+      "description": "deskripsi momen dalam bahasa Indonesia yang relatable",
       "mood": "satu kata: mysterious/melancholic/tense/euphoric/triumphant/dreamy/playful/longing"
     }
   ]
 }
 
-Rules timepoints:
+Rules:
 - 6-8 timepoints untuk lagu ~2 menit
 - Timestamp pertama "0:00" label "Intro", terakhir label "Outro"
-- Bahasa Indonesia Gen Z yang relatable dan emosional
+- enhancedPrompt: hanya elemen musikal (instrumen, tempo, kunci, mood, tekstur) — tidak ada kata eksplisit, keras, atau sensitif
 - Fokus pada audio/musik bukan visual`,
     messages: [{
       role: "user",
