@@ -49,7 +49,7 @@ export async function generateCharacterPortrait(characterPrompt: string): Promis
 
   return wavespeedPost(T2I_ENDPOINT, {
     prompt: `${characterPrompt}, photorealistic portrait, attractive, striking features, flawless skin, expressive eyes, soft cinematic lighting, shallow depth of field, editorial fashion quality, high quality, 8k`,
-    negative_prompt: "nsfw, nudity, nude, naked, sexual, explicit, suggestive, revealing clothing, cleavage, lingerie, violence, blood, gore, weapons, disturbing, horror, scary, dark, ugly, deformed, disfigured, watermark, text",
+    negative_prompt: "nsfw, nudity, nude, naked, sexual, explicit, suggestive, revealing clothing, cleavage, lingerie, violence, blood, gore, weapons, disturbing, horror, scary, dark, ugly, deformed, disfigured, watermark, text, letters, words, typography, captions, subtitles, labels, numbers, writing, inscription, font, logo, signature",
     size: "720*1280",
     enable_sync_mode: true,
     num_inference_steps: 35,
@@ -63,7 +63,7 @@ export async function generateNanoBananaImage(prompt: string, characterImageUrl:
 
   return wavespeedPost(EDIT_ENDPOINT, {
     prompt: `${prompt}, photorealistic, beautiful, surreal, cinematic lighting, high quality, 8k, widescreen landscape 16:9. Image 1 provides a loose character aesthetic reference only`,
-    negative_prompt: "nsfw, nudity, nude, naked, sexual, explicit, suggestive, revealing clothing, cleavage, lingerie, violence, blood, gore, weapons, disturbing, horror, scary, dark, ugly, deformed, disfigured, watermark, text",
+    negative_prompt: "nsfw, nudity, nude, naked, sexual, explicit, suggestive, revealing clothing, cleavage, lingerie, violence, blood, gore, weapons, disturbing, horror, scary, dark, ugly, deformed, disfigured, watermark, text, letters, words, typography, captions, subtitles, labels, numbers, writing, inscription, font, logo, signature",
     images: [characterImageUrl],
     size: "1280*720",
     enable_sync_mode: true,
