@@ -97,6 +97,18 @@ db.exec(`
     error       TEXT,
     created_at  INTEGER NOT NULL DEFAULT (unixepoch())
   );
+
+  CREATE TABLE IF NOT EXISTS music_jobs (
+    id           TEXT PRIMARY KEY,
+    phone        TEXT NOT NULL,
+    prompt       TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    audio_url    TEXT,
+    error        TEXT,
+    credits_used INTEGER NOT NULL DEFAULT 10,
+    created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+  CREATE INDEX IF NOT EXISTS idx_music_jobs_phone ON music_jobs(phone);
 `);
 
 // ── Prepared statements ───────────────────────────────────────────────────────
@@ -129,6 +141,10 @@ const stmts = {
   getAssemblyJob:    db.prepare("SELECT * FROM assembly_jobs WHERE id = ?"),
   updateAssemblyJob: db.prepare("UPDATE assembly_jobs SET status = ?, music_url = ?, video_url = ?, error = ? WHERE id = ?"),
   staleAssemblyJobs: db.prepare("SELECT * FROM assembly_jobs WHERE status NOT IN ('completed','failed') AND created_at < ?"),
+
+  insertMusicJob: db.prepare("INSERT INTO music_jobs (id, phone, prompt) VALUES (?, ?, ?)"),
+  getMusicJob:    db.prepare("SELECT * FROM music_jobs WHERE id = ?"),
+  updateMusicJob: db.prepare("UPDATE music_jobs SET status = ?, audio_url = ?, error = ? WHERE id = ?"),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -402,6 +418,23 @@ export function getStaleAssemblyJobs(olderThanUnix: number) {
   return stmts.staleAssemblyJobs.all(olderThanUnix) as Array<{
     id: string; project_id: string; phone: string; status: string;
   }>;
+}
+
+// ── Music jobs ────────────────────────────────────────────────────────────────
+
+export function createMusicJob(id: string, phone: string, prompt: string): void {
+  stmts.insertMusicJob.run(id, phone, prompt);
+}
+
+export function getMusicJob(id: string) {
+  return stmts.getMusicJob.get(id) as {
+    id: string; phone: string; prompt: string;
+    status: string; audio_url: string | null; error: string | null; credits_used: number;
+  } | undefined;
+}
+
+export function updateMusicJob(id: string, status: string, audioUrl?: string, error?: string): void {
+  stmts.updateMusicJob.run(status, audioUrl ?? null, error ?? null, id);
 }
 
 export default db;
