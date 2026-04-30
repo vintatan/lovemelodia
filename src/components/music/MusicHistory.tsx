@@ -261,17 +261,23 @@ export default function MusicHistory({ token }: MusicHistoryProps) {
   const [jobs, setJobs] = useState<MusicJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
+    setError("");
     apiFetch("/api/music/history", token, { method: "GET" })
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok && r.status === 401) throw new Error("Sesi kadaluarsa. Silakan login ulang.");
+        return r.json();
+      })
       .then((data: { jobs?: MusicJob[]; error?: string }) => {
         if (data.jobs) setJobs(data.jobs.filter(j => j.status !== "failed"));
         else setError(data.error ?? "Gagal memuat riwayat");
       })
-      .catch(() => setError("Gagal memuat riwayat"))
+      .catch((e: Error) => setError(e.message || "Gagal memuat riwayat"))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, retryKey]);
 
   if (loading) {
     return (
@@ -291,6 +297,12 @@ export default function MusicHistory({ token }: MusicHistoryProps) {
       <div className="text-center py-20 space-y-3">
         <div className="text-3xl">😓</div>
         <p className="text-sm text-[var(--text-muted)]">{error}</p>
+        <button
+          onClick={() => setRetryKey(k => k + 1)}
+          className="px-5 py-2 rounded-xl card-elevated text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+        >
+          Coba Lagi
+        </button>
       </div>
     );
   }

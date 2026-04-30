@@ -49,6 +49,7 @@ export async function generateCharacterPortrait(characterPrompt: string): Promis
 
   return wavespeedPost(T2I_ENDPOINT, {
     prompt: `${characterPrompt}, photorealistic portrait, attractive, striking features, flawless skin, expressive eyes, soft cinematic lighting, shallow depth of field, editorial fashion quality, high quality, 8k`,
+    negative_prompt: "nsfw, nudity, nude, naked, sexual, explicit, suggestive, revealing clothing, cleavage, lingerie, violence, blood, gore, weapons, disturbing, horror, scary, dark, ugly, deformed, disfigured, watermark, text",
     size: "720*1280",
     enable_sync_mode: true,
     num_inference_steps: 35,
@@ -62,6 +63,7 @@ export async function generateNanoBananaImage(prompt: string, characterImageUrl:
 
   return wavespeedPost(EDIT_ENDPOINT, {
     prompt: `Image 1 is the character reference: preserve their face, hair, skin tone, and outfit exactly across all scenes. ${prompt}, photorealistic, beautiful, cinematic lighting, high quality, 8k, portrait vertical composition, subject centered`,
+    negative_prompt: "nsfw, nudity, nude, naked, sexual, explicit, suggestive, revealing clothing, cleavage, lingerie, violence, blood, gore, weapons, disturbing, horror, scary, dark, ugly, deformed, disfigured, watermark, text",
     images: [characterImageUrl],
     size: "720*1280",
     enable_sync_mode: true,

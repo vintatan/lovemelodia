@@ -263,7 +263,12 @@ Rules:
 - singerGender: infer from lyric pronouns, emotional perspective, and narrative voice. Indonesian lyrics: check for feminine/masculine framing.
 - characterPortraitPrompt: reflect the song's specific world. Pull appearance details (outfit, hair, expression) directly from lyric imagery. The character must feel like they belong in this song's universe — not generic. Always attractive and visually compelling.
 - keyVisuals: be concrete and specific — pull from lyric metaphors, objects, places, and actions named in the song.
-- setting: be evocative and specific, matching the emotional geography of the song.`,
+- setting: be evocative and specific, matching the emotional geography of the song.
+CONTENT SAFETY — ABSOLUTE RULES (never break these):
+- NO sexual content, nudity, revealing clothing, suggestive poses, or romantic/physical intimacy
+- NO violence, weapons, blood, gore, or threatening imagery
+- NO dark, disturbing, horror, or explicit content of any kind
+- All output must be safe for all ages and suitable for general audiences`,
     messages: [{
       role: "user",
       content: `Song title: ${songTitle ?? "(untitled)"}
@@ -303,12 +308,17 @@ Create a single concise portrait prompt for an AI image generator.
 The character must visually reflect the song's theme, mood, and story — not just the music genre.
 Rules:
 - One paragraph, max 60 words
-- CRITICAL: Read the lyrics carefully to identify the narrator's gender (pronouns, perspective, references). If the narrator is female (uses "aku" as a woman, references feminine experiences), the character MUST be female. If male, MUST be male. Lyrics are the most reliable source — use them first before other signals.
-- Describe a specific Indonesian person whose look, outfit, and expression embody the song's narrative
-- Include: age range, EXPLICIT gender (e.g. "young woman" or "young man"), distinctive features, outfit that fits the song's theme, emotional expression
-- Style: photorealistic portrait, natural lighting, sharp focus, beautiful, 8k
-- No violence, no explicit content
-- Output ONLY the prompt text, nothing else`,
+- CRITICAL: Read the lyrics carefully to identify the narrator's gender. If female, character MUST be female. If male, MUST be male.
+- Describe a specific attractive Indonesian person whose look, outfit, and expression embody the song's narrative
+- Include: age range, EXPLICIT gender (e.g. "young woman" or "young man"), distinctive features, fully-clothed outfit that fits the song's theme, emotional expression
+- Style: photorealistic portrait, natural lighting, sharp focus, beautiful, editorial quality, 8k
+- Output ONLY the prompt text, nothing else
+CONTENT SAFETY — ABSOLUTE RULES:
+- NO sexual content, nudity, revealing or skimpy clothing, cleavage, suggestive poses
+- NO violence, weapons, blood, gore, or threatening imagery
+- NO dark, disturbing, horror, or explicit content
+- Characters must be fully clothed in appropriate, tasteful outfits
+- All output safe for all ages`,
     messages: [{
       role: "user",
       content: `Song title: ${songTitle ?? "(untitled)"}
@@ -347,9 +357,14 @@ Rules:
 - Describe ENVIRONMENT, MOOD, and ATMOSPHERE only — NOT the character's face or body (reference image handles that)
 - Portrait 9:16 vertical, subject centered in the middle-third, avoid extremes of frame
 - Depth: foreground element + open midground space + atmospheric background
-- Safe, family-friendly content only — no violence, no explicit content, no dark/disturbing imagery
 - Keep prompts simple and clear: location, lighting quality, color mood, time of day
 - Max 60 words per prompt
+CONTENT SAFETY — ABSOLUTE RULES (never break these, no exceptions):
+- NO sexual content, nudity, revealing clothing, suggestive or intimate scenes
+- NO violence, weapons, blood, gore, fighting, or threatening imagery
+- NO dark, disturbing, horror, scary, or psychologically distressing imagery
+- NO alcohol, drugs, or illegal activity
+- All scenes must be wholesome, positive, and suitable for all ages
 Respond ONLY with valid JSON: { "prompts": ["prompt1", "prompt2", ...] }`,
     messages: [{
       role: "user",
