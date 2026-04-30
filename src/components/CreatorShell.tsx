@@ -45,7 +45,7 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
       </header>
 
       {/* Mode tabs */}
-      <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 overflow-x-auto">
+      <div className="flex justify-center border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 overflow-x-auto">
         {MODES.map(m => {
           const isActive = m.id === mode;
           return (

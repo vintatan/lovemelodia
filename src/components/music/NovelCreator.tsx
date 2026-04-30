@@ -17,6 +17,8 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
   const [phase, setPhase] = useState<NovelPhase>("idle");
   const [jobId, setJobId] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [timepoints, setTimepoints] = useState<Array<{ timestamp: string; label: string; description: string; mood: string }>>([]);
+  const [regenIdx, setRegenIdx] = useState<number | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [statusLabel, setStatusLabel] = useState("Mempersiapkan...");
@@ -38,8 +40,10 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
     const reader = new FileReader();
     reader.onload = ev => {
       const result = ev.target?.result as string;
+      const b64 = result.replace(/^data:image\/[a-z+]+;base64,/, "");
+      if (!b64) return;
       setCharPreview(result);
-      setCharImageBase64(result.replace(/^data:image\/[a-z+]+;base64,/, ""));
+      setCharImageBase64(b64);
     };
     reader.readAsDataURL(file);
   }
@@ -75,9 +79,10 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
       try {
         const res = await apiFetch(`/api/novel/status/${id}`, token, { method: "GET" });
         const data = await res.json() as {
-          status: string; imageUrls?: string[]; videoUrl?: string | null; error?: string;
+          status: string; imageUrls?: string[]; timepoints?: typeof timepoints; videoUrl?: string | null; error?: string;
         };
         if (data.imageUrls && data.imageUrls.length > 0) setImageUrls(data.imageUrls);
+        if (data.timepoints && data.timepoints.length > 0) setTimepoints(data.timepoints);
 
         if (data.status === "awaiting_approval") {
           setPhase("reviewing");
@@ -103,6 +108,28 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
         pollStatus(id);
       }
     }, 3000);
+  }
+
+  async function handleRegenImage(idx: number) {
+    if (!jobId || regenIdx !== null) return;
+    setRegenIdx(idx);
+    try {
+      await apiFetch(`/api/novel/regenerate-image/${jobId}/${idx}`, token, { method: "POST" });
+      // Poll for the updated image
+      const poll = async () => {
+        const res = await apiFetch(`/api/novel/status/${jobId}`, token, { method: "GET" });
+        const data = await res.json() as { imageUrls?: string[] };
+        if (data.imageUrls?.[idx] && data.imageUrls[idx] !== imageUrls[idx]) {
+          setImageUrls(data.imageUrls);
+          setRegenIdx(null);
+        } else {
+          pollRef.current = setTimeout(poll, 3000);
+        }
+      };
+      pollRef.current = setTimeout(poll, 3000);
+    } catch {
+      setRegenIdx(null);
+    }
   }
 
   async function handleApprove() {
@@ -315,12 +342,33 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
                   initial={{ opacity: 0, scale: 0.85 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ type: "spring", stiffness: 340, damping: 22, delay: i * 0.05 }}
-                  className="aspect-video rounded-xl overflow-hidden cursor-pointer relative group"
+                  className="aspect-video rounded-xl overflow-hidden relative group"
                 >
-                  <img src={url} alt={`scene ${i + 1}`} className="w-full h-full object-cover" />
-                  <div className="absolute bottom-1 left-1 bg-black/60 rounded px-1 py-0.5 text-[9px] text-white font-mono opacity-0 group-hover:opacity-100 transition-opacity">
-                    {i + 1}
+                  {regenIdx === i ? (
+                    <div className="w-full h-full bg-black/60 flex items-center justify-center">
+                      <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                      </svg>
+                    </div>
+                  ) : (
+                    <img src={url} alt={`scene ${i + 1}`} className="w-full h-full object-cover" />
+                  )}
+                  {/* Timestamp + label always visible */}
+                  <div className="absolute top-1 left-1 bg-black/70 rounded px-1.5 py-0.5 flex items-center gap-1">
+                    <span className="text-[8px] text-white/80 font-mono">{timepoints[i]?.timestamp ?? `${i + 1}`}</span>
+                    {timepoints[i]?.label && <span className="text-[8px] text-white/60 font-medium">{timepoints[i].label}</span>}
                   </div>
+                  {/* Regenerate button on hover */}
+                  <button
+                    onClick={() => void handleRegenImage(i)}
+                    disabled={regenIdx !== null}
+                    className="absolute bottom-1 right-1 bg-black/70 rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-30"
+                    title="Bikin ulang scene ini"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                      <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.32"/>
+                    </svg>
+                  </button>
                 </motion.div>
               ))}
             </div>

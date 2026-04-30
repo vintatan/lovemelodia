@@ -108,13 +108,14 @@ export async function createMusicJobInSupabase(job: {
   }
 }
 
-export async function updateMusicJobInSupabase(id: string, status: string, audioUrl?: string | null, error?: string | null, enhancedPrompt?: string | null): Promise<void> {
+export async function updateMusicJobInSupabase(id: string, status: string, audioUrl?: string | null, error?: string | null, enhancedPrompt?: string | null, lyrics?: string | null): Promise<void> {
   if (!supabase) return;
   try {
     const updates: Record<string, unknown> = { status };
     if (audioUrl !== undefined) updates.audio_url = audioUrl;
     if (error !== undefined) updates.error = error;
     if (enhancedPrompt !== undefined) updates.enhanced_prompt = enhancedPrompt;
+    if (lyrics !== undefined) updates.lyrics = lyrics;
     await supabase.from("music_jobs").update(updates).eq("id", id);
   } catch (err) {
     console.error("[Supabase] updateMusicJob error:", err);

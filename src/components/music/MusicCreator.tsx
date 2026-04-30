@@ -174,6 +174,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
   const [errorMsg, setErrorMsg] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [enhancedPrompt, setEnhancedPrompt] = useState<string | null>(null);
+  const [lyrics, setLyrics] = useState<string | null>(null);
   const [timepoints, setTimepoints] = useState<MusicTimepoint[]>([]);
   const [editingTitle, setEditingTitle] = useState(false);
   const [savingTitle, setSavingTitle] = useState(false);
@@ -211,6 +212,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
   function toggleGenre(g: string) {
     setSelectedGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
     setEnhancedPrompt(null);
+    setLyrics(null);
     setTimepoints([]);
   }
 
@@ -223,9 +225,10 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
         method: "POST",
         body: JSON.stringify({ prompt: rawPrompt, genres: selectedGenres }),
       });
-      const data = await res.json() as { enhancedPrompt?: string; timepoints?: MusicTimepoint[]; error?: string };
+      const data = await res.json() as { enhancedPrompt?: string; lyrics?: string; timepoints?: MusicTimepoint[]; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Gagal enhance prompt");
       setEnhancedPrompt(data.enhancedPrompt ?? null);
+      setLyrics(data.lyrics ?? null);
       setTimepoints(data.timepoints ?? []);
     } catch (err: any) {
       console.error("Enhance failed:", err.message);
@@ -261,7 +264,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
     try {
       const res = await apiFetch("/api/music/generate", token, {
         method: "POST",
-        body: JSON.stringify({ prompt: finalPrompt, genres: selectedGenres, title: title.trim() || undefined, enhancedPrompt, timepoints: timepoints.length > 0 ? timepoints : undefined }),
+        body: JSON.stringify({ prompt: finalPrompt, genres: selectedGenres, title: title.trim() || undefined, enhancedPrompt, lyrics, timepoints: timepoints.length > 0 ? timepoints : undefined }),
       });
       const data = await res.json() as { jobId?: string; creditsRemaining?: number; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Gagal memulai generasi");
@@ -320,6 +323,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
     setErrorMsg("");
     setTitle("");
     setEnhancedPrompt(null);
+    setLyrics(null);
     setTimepoints([]);
     setEditingTitle(false);
   }
@@ -395,6 +399,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
                 onChange={e => {
                   setPrompt(e.target.value);
                   setEnhancedPrompt(null);
+                  setLyrics(null);
                   setTimepoints([]);
                 }}
                 placeholder="Tulis vibe, suasana, atau cerita di balik musikmu..."

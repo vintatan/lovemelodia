@@ -6,9 +6,9 @@ import {
   getMusicJob, createNovelJob, getNovelJob, updateNovelJob,
   getOrCreateUserAsync, deductCreditsAsync, getCredits, addCreditsAsync,
 } from "../lib/db.js";
-import { generateStoryboardImagePrompts, generateEnhancedPromptWithTimepoints, generateCharacterDescription } from "../lib/anthropic.js";
+import { generateStoryboardImagePrompts, generateEnhancedPromptWithTimepoints, generateSongUnderstanding } from "../lib/anthropic.js";
 import { generateNanoBananaImage, generateCharacterPortrait } from "../lib/wavespeed-nano.js";
-import { uploadUrlToGcs, uploadToGcs } from "../lib/gcs.js"; // uploadToGcs needed for user-uploaded char
+import { uploadToGcs } from "../lib/gcs.js";
 import { assembleVideo, cleanupTmpDir } from "../lib/ffmpeg.js";
 import { createNovelJobInSupabase, updateNovelJobInSupabase } from "../lib/supabase.js";
 import { logCost, calculateClaudeCost } from "../lib/cost-logger.js";
@@ -76,28 +76,33 @@ router.post("/generate", async (req, res) => {
 
   const user = await getOrCreateUserAsync(phone);
   if (user.credits < NOVEL_CREDITS) return res.status(402).json({ error: "Kredit tidak cukup", credits: user.credits });
+
   const deducted = await deductCreditsAsync(phone, NOVEL_CREDITS);
   if (!deducted) return res.status(402).json({ error: "Kredit tidak cukup", credits: getCredits(phone) });
 
   const jobId = nanoid();
   createNovelJob(jobId, musicJobId, phone);
-  void createNovelJobInSupabase({ id: jobId, musicJobId, phone });
+  createNovelJobInSupabase({ id: jobId, musicJobId, phone }).catch(e => console.error("[Novel] Supabase create failed:", e));
 
   const storedTimepointsJson = musicJob.timepoints_json;
   const enhancedPrompt = musicJob.enhanced_prompt ?? musicJob.prompt;
   const songTitle = musicJob.title ?? null;
   const songDescription = musicJob.prompt;
+  const songLyrics = musicJob.lyrics ?? null;
 
   (async () => {
     try {
       updateNovelJob(jobId, "generating_images");
-      void updateNovelJobInSupabase(jobId, "generating_images");
+      updateNovelJobInSupabase(jobId, "generating_images").catch(e => console.error("[Novel] Supabase sync failed:", e));
 
-      // Resolve timepoints from stored JSON or generate fresh
-      let timepointsRaw: MusicTimepoint[];
-      if (storedTimepointsJson) {
-        timepointsRaw = JSON.parse(storedTimepointsJson) as MusicTimepoint[];
-      } else {
+      // Resolve timepoints from stored JSON or generate fresh — run in parallel with song understanding
+      const timepointsPromise: Promise<MusicTimepoint[]> = (async () => {
+        if (storedTimepointsJson) {
+          try {
+            const parsed = JSON.parse(storedTimepointsJson) as MusicTimepoint[];
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          } catch { /* fall through */ }
+        }
         const { timepoints, inputTokens, outputTokens } = await generateEnhancedPromptWithTimepoints({
           genres: [],
           userDescription: songDescription,
@@ -107,38 +112,38 @@ router.post("/generate", async (req, res) => {
           costUsd: calculateClaudeCost("claude-sonnet-4-6", inputTokens, outputTokens),
           inputTokens, outputTokens,
         });
-        timepointsRaw = timepoints;
-      }
+        return timepoints;
+      })();
 
-      // Resolve or auto-generate the character reference image
-      // IMPORTANT: must be a publicly accessible URL — Seedream fetches it server-side.
-      // WaveSpeed CDN URLs are always public. GCS bucket is private so we never pass GCS URLs here.
-      let charImageUrl: string;
-      if (characterImageBase64) {
-        // User-uploaded photo — send as base64 data URI (Seedream accepts this)
-        charImageUrl = `data:image/jpeg;base64,${characterImageBase64}`;
-      } else {
-        const charDesc = await generateCharacterDescription({
-          songTitle,
-          songDescription,
-          enhancedMusicPrompt: enhancedPrompt,
-          genres: [],
-        });
-        logCost({ phone, service: "claude", operation: "generateCharacterDescription", costUsd: calculateClaudeCost("claude-haiku-4-5-20251001", 350, 80) });
-        // Use the WaveSpeed CDN URL directly — public and immediately accessible
-        charImageUrl = await generateCharacterPortrait(charDesc);
-        // Store a copy in GCS for our records (fire-and-forget, don't use the GCS URL for Seedream)
-        void uploadUrlToGcs(charImageUrl, "image/jpeg", "novels/characters", phone);
-      }
+      // Seed song understanding in parallel with timepoint resolution (Haiku = fast)
+      const understandingPromise = generateSongUnderstanding({
+        songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
+        timepoints: storedTimepointsJson ? (JSON.parse(storedTimepointsJson) as MusicTimepoint[]).slice(0, 3) : [],
+        lyrics: songLyrics,
+      }).catch((e) => { console.error("[Novel] Song understanding failed, continuing:", e); return null; });
 
-      // One cinematic image prompt per timepoint — grounded in song title + description
-      const { prompts, inputTokens: pIn, outputTokens: pOut } = await generateStoryboardImagePrompts({
-        songTitle,
-        songDescription,
-        enhancedMusicPrompt: enhancedPrompt,
-        timepoints: timepointsRaw,
-        genres: [],
+      const [timepointsRaw, songUnderstanding] = await Promise.all([timepointsPromise, understandingPromise]);
+
+      logCost({ phone, service: "claude", operation: "generateSongUnderstanding", costUsd: calculateClaudeCost("claude-haiku-4-5-20251001", 400, 120) });
+
+      // Character portrait: use song understanding's portrait prompt, or fall back to user-uploaded image
+      const charImagePromise: Promise<string> = characterImageBase64
+        ? Promise.resolve(`data:image/jpeg;base64,${characterImageBase64}`)
+        : generateCharacterPortrait(
+            songUnderstanding?.characterPortraitPrompt ||
+            `photorealistic portrait of a young Indonesian person, natural lighting, beautiful, 8k, sharp focus`
+          );
+
+      const storyboardPromise = generateStoryboardImagePrompts({
+        songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
+        timepoints: timepointsRaw, genres: [], lyrics: songLyrics, songUnderstanding,
       });
+
+      const [charImageUrl, { prompts, inputTokens: pIn, outputTokens: pOut }] = await Promise.all([
+        charImagePromise,
+        storyboardPromise,
+      ]);
+
       logCost({
         phone, service: "claude", operation: "generateStoryboardPrompts",
         costUsd: calculateClaudeCost("claude-sonnet-4-6", pIn, pOut),
@@ -152,13 +157,11 @@ router.post("/generate", async (req, res) => {
           prompts[i] ?? "cinematic landscape, beautiful, photorealistic, atmospheric lighting",
           charImageUrl,
         );
-        const gcsUrl = await uploadUrlToGcs(rawUrl, "image/jpeg", "novels/images", phone);
-        const url = gcsUrl ?? rawUrl;
-        imageSlots[i] = url;
+        imageSlots[i] = rawUrl;
         const partial = imageSlots.filter(Boolean) as string[];
         updateNovelJob(jobId, "generating_images", partial);
-        void updateNovelJobInSupabase(jobId, "generating_images", partial);
-        return url;
+        updateNovelJobInSupabase(jobId, "generating_images", partial).catch(e => console.error("[Novel] Supabase sync failed:", e));
+        return rawUrl;
       });
 
       await runCapped(tasks, 3);
@@ -172,11 +175,11 @@ router.post("/generate", async (req, res) => {
       // Transition to awaiting_approval — store images + timepoints, no video yet
       const timepointsJson = JSON.stringify(validTimepoints);
       updateNovelJob(jobId, "awaiting_approval", validImages, timepointsJson);
-      void updateNovelJobInSupabase(jobId, "awaiting_approval", validImages, null, null, timepointsJson);
+      updateNovelJobInSupabase(jobId, "awaiting_approval", validImages, null, null, timepointsJson).catch(e => console.error("[Novel] Supabase sync failed:", e));
     } catch (err: any) {
       console.error(`[Novel] generate ${jobId} failed:`, err);
       updateNovelJob(jobId, "failed", undefined, undefined, undefined, err.message ?? "Generasi gambar gagal");
-      void updateNovelJobInSupabase(jobId, "failed", undefined, undefined, err.message);
+      updateNovelJobInSupabase(jobId, "failed", undefined, undefined, err.message).catch(e => console.error("[Novel] Supabase sync failed:", e));
       await addCreditsAsync(phone, NOVEL_CREDITS, "refund").catch(() => {});
     }
   })();
@@ -199,7 +202,7 @@ router.post("/assemble/:jobId", async (req, res) => {
   if (!musicJob?.audio_url) return res.status(400).json({ error: "Audio tidak ditemukan" });
 
   updateNovelJob(job.id, "assembling");
-  void updateNovelJobInSupabase(job.id, "assembling");
+  updateNovelJobInSupabase(job.id, "assembling").catch(e => console.error("[Novel] Supabase sync failed:", e));
   res.status(202).json({ ok: true });
 
   (async () => {
@@ -222,7 +225,7 @@ router.post("/assemble/:jobId", async (req, res) => {
       });
 
       updateNovelJob(job.id, "uploading", imageUrls);
-      void updateNovelJobInSupabase(job.id, "uploading", imageUrls);
+      updateNovelJobInSupabase(job.id, "uploading", imageUrls).catch(e => console.error("[Novel] Supabase sync failed:", e));
 
       const tmpDir = path.dirname(videoPath);
       let videoUrl: string | null = null;
@@ -236,11 +239,11 @@ router.post("/assemble/:jobId", async (req, res) => {
       if (!videoUrl) throw new Error("Gagal upload video ke GCS");
 
       updateNovelJob(job.id, "completed", imageUrls, undefined, videoUrl);
-      void updateNovelJobInSupabase(job.id, "completed", imageUrls, videoUrl, null, job.timepoints_json);
+      updateNovelJobInSupabase(job.id, "completed", imageUrls, videoUrl, null, job.timepoints_json).catch(e => console.error("[Novel] Supabase sync failed:", e));
     } catch (err: any) {
       console.error(`[Novel] assemble ${job.id} failed:`, err);
       updateNovelJob(job.id, "failed", undefined, undefined, undefined, err.message ?? "Assembly video gagal");
-      void updateNovelJobInSupabase(job.id, "failed", undefined, undefined, err.message);
+      updateNovelJobInSupabase(job.id, "failed", undefined, undefined, err.message).catch(e => console.error("[Novel] Supabase sync failed:", e));
       await addCreditsAsync(phone, NOVEL_CREDITS, "refund").catch(() => {});
     }
   })();
@@ -255,12 +258,77 @@ router.get("/status/:jobId", (req, res) => {
   if (job.phone !== phone) return res.status(403).json({ error: "Akses ditolak" });
 
   const imageUrls: string[] = job.image_urls_json ? JSON.parse(job.image_urls_json) : [];
+  const timepoints = job.timepoints_json ? JSON.parse(job.timepoints_json) as Array<{ timestamp: string; label: string; description: string; mood: string }> : [];
   return res.json({
     status: job.status,
     imageUrls,
+    timepoints,
     videoUrl: job.status === "completed" ? job.video_url : null,
     error: job.error ?? null,
   });
+});
+
+// ── POST /regenerate-image/:jobId/:index — regenerate a single storyboard frame ─
+
+router.post("/regenerate-image/:jobId/:index", async (req, res) => {
+  const phone = req.user!.phone;
+  const job = getNovelJob(req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Job tidak ditemukan" });
+  if (job.phone !== phone) return res.status(403).json({ error: "Akses ditolak" });
+  if (job.status !== "awaiting_approval") return res.status(400).json({ error: "Hanya bisa di fase review" });
+
+  const idx = parseInt(req.params.index, 10);
+  const imageUrls: string[] = job.image_urls_json ? JSON.parse(job.image_urls_json) : [];
+  const timepoints: Array<{ timestamp: string; label: string; description: string; mood: string }> =
+    job.timepoints_json ? JSON.parse(job.timepoints_json) : [];
+
+  if (isNaN(idx) || idx < 0 || idx >= imageUrls.length) {
+    return res.status(400).json({ error: "Index tidak valid" });
+  }
+
+  const musicJob = getMusicJob(job.music_job_id);
+  if (!musicJob) return res.status(400).json({ error: "Music job tidak ditemukan" });
+
+  res.status(202).json({ ok: true });
+
+  (async () => {
+    try {
+      const songTitle = musicJob.title ?? null;
+      const songDescription = musicJob.prompt;
+      const enhancedPrompt = musicJob.enhanced_prompt ?? musicJob.prompt;
+      const songLyricsRegen = musicJob.lyrics ?? null;
+      const tp = timepoints[idx];
+      if (!tp) throw new Error("Timepoint tidak ditemukan");
+
+      const songUnderstanding = await generateSongUnderstanding({
+        songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
+        timepoints: [tp], lyrics: songLyricsRegen,
+      }).catch(() => null);
+
+      const [{ prompts }, charImageUrl] = await Promise.all([
+        generateStoryboardImagePrompts({
+          songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
+          timepoints: [tp], genres: [], lyrics: songLyricsRegen, songUnderstanding,
+        }),
+        generateCharacterPortrait(
+          songUnderstanding?.characterPortraitPrompt ||
+          `photorealistic portrait of a young Indonesian person, natural lighting, beautiful, 8k, sharp focus`
+        ),
+      ]);
+
+      const newUrl = await generateNanoBananaImage(
+        prompts[0] ?? "cinematic landscape, beautiful, photorealistic, atmospheric lighting",
+        charImageUrl,
+      );
+
+      imageUrls[idx] = newUrl;
+      updateNovelJob(job.id, "awaiting_approval", imageUrls);
+      updateNovelJobInSupabase(job.id, "awaiting_approval", imageUrls, null, null, job.timepoints_json)
+        .catch(e => console.error("[Novel] Supabase sync failed:", e));
+    } catch (err: any) {
+      console.error(`[Novel] regenerate-image ${job.id}[${idx}] failed:`, err);
+    }
+  })();
 });
 
 export default router;

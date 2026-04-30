@@ -124,7 +124,7 @@ export default function AuthGate({ onAuth, onBack }: AuthGateProps) {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55, ease: [0.25, 1, 0.5, 1] }}
-        className="text-center mb-8 max-w-xs relative z-10"
+        className="text-center mb-8 max-w-sm relative z-10"
       >
         <motion.div
           animate={{ y: [0, -8, 0] }}
@@ -162,9 +162,9 @@ export default function AuthGate({ onAuth, onBack }: AuthGateProps) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.18, duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
-        className="card-gradient-border w-full max-w-xs relative z-10"
+        className="card-gradient-border w-full max-w-sm relative z-10"
       >
-        <div className="card-gradient-border-inner p-6">
+        <div className="card-gradient-border-inner p-7">
           <AnimatePresence mode="wait">
 
             {step === "phone" && (

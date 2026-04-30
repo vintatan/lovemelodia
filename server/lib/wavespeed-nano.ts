@@ -61,9 +61,9 @@ export async function generateNanoBananaImage(prompt: string, characterImageUrl:
   if (!apiKey) throw new Error("WAVESPEED_API_KEY not set");
 
   return wavespeedPost(EDIT_ENDPOINT, {
-    prompt: `Image 1 is the character reference: preserve their face, hair, skin tone, and outfit exactly across all scenes. ${prompt}, photorealistic, beautiful, cinematic lighting, high quality, 8k`,
+    prompt: `Image 1 is the character reference: preserve their face, hair, skin tone, and outfit exactly across all scenes. ${prompt}, photorealistic, beautiful, cinematic lighting, high quality, 8k, portrait vertical composition, subject centered`,
     images: [characterImageUrl],
-    size: "1280*720",
+    size: "720*1280",
     enable_sync_mode: true,
   }, apiKey);
 }

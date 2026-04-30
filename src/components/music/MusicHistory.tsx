@@ -2,6 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { apiFetch } from "../../lib/api.ts";
 
+interface NovelSummary {
+  status: string;
+  imageCount: number;
+  videoUrl: string | null;
+}
+
 interface MusicJob {
   id: string;
   title: string | null;
@@ -11,6 +17,7 @@ interface MusicJob {
   error: string | null;
   credits_used: number;
   created_at: number;
+  novel: NovelSummary | null;
 }
 
 function MiniPlayer({ audioUrl }: { audioUrl: string }) {
@@ -214,7 +221,21 @@ function JobCard({ job: initialJob, token }: { job: MusicJob; token: string }) {
         <p className="text-[11px] text-[var(--text-faint)] line-clamp-1">{job.prompt}</p>
       )}
 
-      <p className="text-[11px] text-[var(--text-faint)]">{formatDate(job.created_at)}</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <p className="text-[11px] text-[var(--text-faint)]">{formatDate(job.created_at)}</p>
+        {job.novel && (
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide"
+            style={
+              job.novel.videoUrl
+                ? { background: "rgba(124,58,237,0.15)", color: "#a78bfa" }
+                : { background: "rgba(255,45,85,0.10)", color: "var(--accent-red)" }
+            }
+          >
+            {job.novel.videoUrl ? "🎬 Novel Video" : `🖼️ ${job.novel.imageCount} scenes`}
+          </span>
+        )}
+      </div>
 
       {job.status === "completed" && job.audio_url && (
         <MiniPlayer audioUrl={job.audio_url} />
@@ -245,7 +266,7 @@ export default function MusicHistory({ token }: MusicHistoryProps) {
     apiFetch("/api/music/history", token, { method: "GET" })
       .then(r => r.json())
       .then((data: { jobs?: MusicJob[]; error?: string }) => {
-        if (data.jobs) setJobs(data.jobs);
+        if (data.jobs) setJobs(data.jobs.filter(j => j.status !== "failed"));
         else setError(data.error ?? "Gagal memuat riwayat");
       })
       .catch(() => setError("Gagal memuat riwayat"))

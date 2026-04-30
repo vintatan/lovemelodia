@@ -3,6 +3,37 @@ import type { Timepoint } from "./db.js";
 
 const client = new Anthropic();
 
+function escapeNewlinesInStrings(s: string): string {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escaped) { result += c; escaped = false; continue; }
+    if (c === "\\") { result += c; escaped = true; continue; }
+    if (c === '"') { inString = !inString; result += c; continue; }
+    if (inString && (c === "\n" || c === "\r")) { result += "\\n"; continue; }
+    result += c;
+  }
+  return result;
+}
+
+function parseClaudeJson<T>(rawText: string, context: string): T {
+  try { return JSON.parse(rawText) as T; } catch { /* fall through */ }
+  const blockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (blockMatch) { try { return JSON.parse(blockMatch[1]) as T; } catch { /* fall through */ } }
+  const braceMatch = rawText.match(/\{[\s\S]*\}/);
+  if (braceMatch) { try { return JSON.parse(braceMatch[0]) as T; } catch { /* fall through */ } }
+  // Last resort: Claude may emit literal newlines inside JSON string values (common with multi-line lyrics)
+  const sanitized = escapeNewlinesInStrings(rawText);
+  try { return JSON.parse(sanitized) as T; } catch { /* fall through */ }
+  const sanitizedBlock = blockMatch ? escapeNewlinesInStrings(blockMatch[1]) : null;
+  if (sanitizedBlock) { try { return JSON.parse(sanitizedBlock) as T; } catch { /* fall through */ } }
+  const sanitizedBrace = braceMatch ? escapeNewlinesInStrings(braceMatch[0]) : null;
+  if (sanitizedBrace) { try { return JSON.parse(sanitizedBrace) as T; } catch { /* fall through */ } }
+  throw new Error(`${context}: ${rawText.slice(0, 200)}`);
+}
+
 const SYSTEM_PROMPT = `You are a music video director. Transform user inputs into a music production brief and a scene breakdown that is tightly synchronized to the song's lyrical and dramatic arc.
 Respond ONLY with valid JSON matching this exact schema — no markdown, no explanation outside the JSON:
 {
@@ -83,6 +114,7 @@ export async function generateEnhancedPromptWithTimepoints(params: {
   userDescription: string;
 }): Promise<{
   enhancedPrompt: string;
+  lyrics: string;
   timepoints: MusicTimepoint[];
   inputTokens: number;
   outputTokens: number;
@@ -91,15 +123,17 @@ export async function generateEnhancedPromptWithTimepoints(params: {
 
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 1024,
-    system: `Kamu adalah music director yang ahli membuat lagu indie Indonesia yang natural dan otentik.
+    max_tokens: 2048,
+    system: `Kamu adalah music director dan penulis lagu yang ahli membuat lagu indie Indonesia yang natural dan otentik.
 Dari deskripsi vibe pengguna, buat:
 1. Enhanced prompt dalam bahasa Inggris (untuk AI music model) — deskripsi musikal yang bersih dan netral
-2. Dramatic timepoints dalam bahasa Indonesia — momen struktural lagu yang menarik
+2. Lirik lagu lengkap dalam Bahasa Indonesia — 2-3 verse, chorus, dan outro
+3. Dramatic timepoints dalam bahasa Indonesia — momen struktural lagu yang menarik
 
 Respons HANYA berupa JSON valid (tanpa markdown, tanpa penjelasan lain):
 {
   "enhancedPrompt": "2-4 kalimat Inggris: genre, BPM, instrumen, mood, production style. WAJIB diawali dengan 'Indonesian language vocals and lyrics,' dan WAJIB mengandung nuansa indie yang natural dan organik. Diakhiri dengan 'approximately 2 to 3 minutes in duration'",
+  "lyrics": "[Verse 1]\\n...\\n\\n[Pre-Chorus]\\n...\\n\\n[Chorus]\\n...\\n\\n[Verse 2]\\n...\\n\\n[Chorus]\\n...\\n\\n[Outro]\\n...",
   "timepoints": [
     {
       "timestamp": "0:00",
@@ -116,25 +150,20 @@ Rules:
 - enhancedPrompt WAJIB dimulai dengan "Indonesian language vocals and lyrics," — tidak boleh dihilangkan
 - Selalu dorong ke arah: indie, akustik/semi-akustik, produksi natural dan hangat, feel otentik — hindari suara over-produced atau terlalu elektronik kecuali genre menuntut itu
 - enhancedPrompt: hanya elemen musikal (instrumen, tempo, kunci, mood, tekstur) — tidak ada kata eksplisit, keras, atau sensitif
-- Fokus pada audio/musik bukan visual`,
+- Lirik HARUS mencerminkan perspektif pencerita yang jelas: jika tema cinta dari sudut pandang perempuan, gunakan "aku" perempuan; jika laki-laki, gunakan "aku" laki-laki
+- Lirik harus original, relatable untuk Gen Z Indonesia, bersih dan aman untuk semua umur
+- Fokus pada audio/musik bukan visual untuk enhancedPrompt`,
     messages: [{
       role: "user",
       content: `Genre/vibe: ${genres.length > 0 ? genres.join(", ") : "bebas"}
 Deskripsi: ${userDescription || "Bikin lagu yang baper dan viral buat Gen Z"}
 
-Buat enhanced prompt + dramatic timepoints.`,
+Buat enhanced prompt + lirik lengkap + dramatic timepoints.`,
     }],
   });
 
   const rawText = (msg.content[0] as { text: string }).text.trim();
-  let parsed: { enhancedPrompt: string; timepoints: MusicTimepoint[] };
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    const match = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (match) parsed = JSON.parse(match[1]);
-    else throw new Error(`Claude returned non-JSON: ${rawText.slice(0, 200)}`);
-  }
+  const parsed = parseClaudeJson<{ enhancedPrompt: string; lyrics: string; timepoints: MusicTimepoint[] }>(rawText, "Claude returned non-JSON");
 
   if (!parsed.enhancedPrompt || !Array.isArray(parsed.timepoints)) {
     throw new Error("Claude response missing required fields");
@@ -142,6 +171,7 @@ Buat enhanced prompt + dramatic timepoints.`,
 
   return {
     enhancedPrompt: parsed.enhancedPrompt,
+    lyrics: parsed.lyrics ?? "",
     timepoints: parsed.timepoints,
     inputTokens: msg.usage.input_tokens,
     outputTokens: msg.usage.output_tokens,
@@ -185,19 +215,7 @@ Generate the enhanced production prompt and 6-8 timepoints with dramatic sync.`;
   });
 
   const rawText = (msg.content[0] as { text: string }).text;
-
-  let parsed: Stage1Result;
-  try {
-    parsed = JSON.parse(rawText) as Stage1Result;
-  } catch {
-    // Try extracting JSON from a markdown code block if model wrapped it
-    const match = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (match) {
-      parsed = JSON.parse(match[1]) as Stage1Result;
-    } else {
-      throw new Error(`Claude returned non-JSON: ${rawText.slice(0, 200)}`);
-    }
-  }
+  const parsed = parseClaudeJson<Stage1Result>(rawText, "Claude returned non-JSON");
 
   if (!parsed.enhancedPrompt || !Array.isArray(parsed.timepoints)) {
     throw new Error("Claude response missing required fields");
@@ -210,13 +228,72 @@ Generate the enhanced production prompt and 6-8 timepoints with dramatic sync.`;
   };
 }
 
+export interface SongUnderstanding {
+  singerGender: "female" | "male" | "neutral";
+  characterPortraitPrompt: string;
+  keyVisuals: string[];
+  setting: string;
+  coreTheme: string;
+}
+
+export async function generateSongUnderstanding(params: {
+  songTitle: string | null;
+  songDescription: string;
+  enhancedMusicPrompt: string;
+  timepoints: Array<{ timestamp: string; label: string; description: string; mood: string }>;
+  lyrics?: string | null;
+}): Promise<SongUnderstanding> {
+  const { songTitle, songDescription, enhancedMusicPrompt, timepoints, lyrics } = params;
+
+  const msg = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 512,
+    system: `You are a music video creative director. Analyze a song to extract visual and narrative intelligence that drives image generation.
+Read ALL available information (title, description, production notes, lyrics, timepoints) to deeply understand the song.
+Respond ONLY with valid JSON — no markdown, no explanation:
+{
+  "singerGender": "female OR male OR neutral",
+  "characterPortraitPrompt": "max 60 words. Specific Indonesian [gender] person: age, distinctive features, outfit from the song's world, emotional expression. Photorealistic portrait, natural lighting, beautiful, 8k. MUST state gender explicitly.",
+  "keyVisuals": ["3-5 concrete visual elements pulled from the lyrics/narrative — specific objects, locations, actions"],
+  "setting": "specific primary environment (e.g. 'rain-soaked Jakarta rooftop at 3am', not just 'city')",
+  "coreTheme": "one sentence: what this song is fundamentally about"
+}
+
+Rules:
+- singerGender: infer from lyric pronouns, emotional perspective, and narrative voice. Indonesian lyrics: check for feminine/masculine framing.
+- characterPortraitPrompt: reflect the song's specific world. Pull appearance details directly from lyric imagery if available.
+- keyVisuals: be concrete and specific — pull from lyric metaphors, objects, places, and actions named in the song.
+- setting: be evocative and specific, matching the emotional geography of the song.`,
+    messages: [{
+      role: "user",
+      content: `Song title: ${songTitle ?? "(untitled)"}
+Song description: ${songDescription}
+Production style: ${enhancedMusicPrompt}${lyrics ? `\n\nLyrics:\n${lyrics}` : ""}
+
+Timepoints:
+${timepoints.map((tp, i) => `${i + 1}. [${tp.timestamp}] ${tp.label} (${tp.mood}): ${tp.description}`).join("\n")}`,
+    }],
+  });
+
+  const rawText = (msg.content[0] as { text: string }).text.trim();
+  const parsed = parseClaudeJson<SongUnderstanding>(rawText, "generateSongUnderstanding returned non-JSON");
+  return {
+    singerGender: parsed.singerGender ?? "neutral",
+    characterPortraitPrompt: parsed.characterPortraitPrompt ?? "",
+    keyVisuals: Array.isArray(parsed.keyVisuals) ? parsed.keyVisuals : [],
+    setting: parsed.setting ?? "",
+    coreTheme: parsed.coreTheme ?? "",
+  };
+}
+
 export async function generateCharacterDescription(params: {
   songTitle: string | null;
   songDescription: string;
   enhancedMusicPrompt: string;
   genres: string[];
+  lyrics?: string | null;
 }): Promise<string> {
-  const { songTitle, songDescription, enhancedMusicPrompt, genres } = params;
+  const { songTitle, songDescription, enhancedMusicPrompt, genres, lyrics } = params;
 
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
@@ -226,8 +303,9 @@ Create a single concise portrait prompt for an AI image generator.
 The character must visually reflect the song's theme, mood, and story — not just the music genre.
 Rules:
 - One paragraph, max 60 words
+- CRITICAL: Read the lyrics carefully to identify the narrator's gender (pronouns, perspective, references). If the narrator is female (uses "aku" as a woman, references feminine experiences), the character MUST be female. If male, MUST be male. Lyrics are the most reliable source — use them first before other signals.
 - Describe a specific Indonesian person whose look, outfit, and expression embody the song's narrative
-- Include: age range, gender, distinctive features, outfit that fits the song's theme, emotional expression
+- Include: age range, EXPLICIT gender (e.g. "young woman" or "young man"), distinctive features, outfit that fits the song's theme, emotional expression
 - Style: photorealistic portrait, natural lighting, sharp focus, beautiful, 8k
 - No violence, no explicit content
 - Output ONLY the prompt text, nothing else`,
@@ -236,7 +314,9 @@ Rules:
       content: `Song title: ${songTitle ?? "(untitled)"}
 Song theme/description: ${songDescription}
 Music production style: ${enhancedMusicPrompt}
-Genres: ${genres.length > 0 ? genres.join(", ") : "indie"}`,
+Genres: ${genres.length > 0 ? genres.join(", ") : "indie"}${lyrics ? `\n\nLyrics:\n${lyrics}` : ""}
+
+Read the lyrics to determine the narrator's gender, then generate the character portrait.`,
     }],
   });
 
@@ -249,43 +329,48 @@ export async function generateStoryboardImagePrompts(params: {
   enhancedMusicPrompt: string;
   timepoints: Array<{ timestamp: string; label: string; description: string; mood: string }>;
   genres: string[];
+  lyrics?: string | null;
+  songUnderstanding?: SongUnderstanding | null;
 }): Promise<{ prompts: string[]; inputTokens: number; outputTokens: number }> {
-  const { songTitle, songDescription, enhancedMusicPrompt, timepoints, genres } = params;
+  const { songTitle, songDescription, enhancedMusicPrompt, timepoints, genres, lyrics, songUnderstanding } = params;
+
+  const understandingBlock = songUnderstanding
+    ? `\nSong understanding:\n- Theme: ${songUnderstanding.coreTheme}\n- Setting: ${songUnderstanding.setting}\n- Key visuals from song: ${songUnderstanding.keyVisuals.join(", ")}`
+    : "";
 
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 1024,
-    system: `You are a cinematic storyboard director for music videos.
-Translate each scene description into an English image prompt that is VISUALLY TIED to the song's specific theme, title, and narrative.
-Every prompt must feel like it belongs to THIS song — not a generic music video.
-Each prompt must be: photorealistic, beautiful, high quality, cinematic, 8k, sharp focus, atmospheric, emotionally resonant.
-Always include: specific lighting (golden hour / neon / moonlight etc), color grade, depth of field, location relevant to the song's story.
-The main character will be composited in via reference — describe ENVIRONMENT and MOOD, not the character's face.
-Safe, clean content only. Landscape 16:9 widescreen composition.
+    max_tokens: 2048,
+    system: `You are a cinematic storyboard director for music videos optimized for vertical short-form (Reels/TikTok).
+Translate each scene description into an English image prompt DEEPLY TIED to this specific song's world.
+Use the song's key visuals, setting, and theme — every prompt must feel unmistakably from THIS song, not generic.
+Each prompt must be: photorealistic, beautiful, cinematic, 8k, sharp focus, atmospheric, emotionally resonant.
+Always include: specific lighting, color grade, depth of field, location from the song's world.
+The main character will be composited via reference image — describe ENVIRONMENT and MOOD only, not the character's face.
+COMPOSITION RULES — CRITICAL:
+- Portrait 9:16 vertical format
+- Key subject and visual interest centered horizontally AND in the middle-third vertically
+- Avoid placing important elements at extreme top/bottom edges (safe zone for reels crop)
+- Depth: foreground element + mid-ground subject space + atmospheric background
+Safe, clean content only.
+Keep each prompt under 80 words.
 Respond ONLY with valid JSON: { "prompts": ["prompt1", "prompt2", ...] }`,
     messages: [{
       role: "user",
       content: `Song title: ${songTitle ?? "(untitled)"}
-Song theme/description: ${songDescription}
-Music production style: ${enhancedMusicPrompt}
-${genres.length > 0 ? `Genres: ${genres.join(", ")}` : ""}
+Song description: ${songDescription}
+Production style: ${enhancedMusicPrompt}
+${genres.length > 0 ? `Genres: ${genres.join(", ")}` : ""}${understandingBlock}${lyrics ? `\n\nLyrics:\n${lyrics}` : ""}
 
 Timepoints:
 ${timepoints.map((tp, i) => `${i + 1}. [${tp.timestamp}] ${tp.label} (${tp.mood}): ${tp.description}`).join("\n")}
 
-Generate one English cinematic image prompt per timepoint. Each scene must visually reflect the song's title and theme. Landscape widescreen, photorealistic, beautiful, cinematic lighting, 8k.`,
+Generate one English cinematic image prompt per timepoint. Ground each scene in the song's specific world — use the key visuals and setting above. Landscape widescreen, photorealistic, cinematic lighting, 8k.`,
     }],
   });
 
   const rawText = (msg.content[0] as { text: string }).text.trim();
-  let parsed: { prompts: string[] };
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    const match = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (match) parsed = JSON.parse(match[1]);
-    else throw new Error(`Claude returned non-JSON for storyboard prompts: ${rawText.slice(0, 200)}`);
-  }
+  const parsed = parseClaudeJson<{ prompts: string[] }>(rawText, "Claude returned non-JSON for storyboard prompts");
 
   if (!Array.isArray(parsed.prompts)) throw new Error("Claude response missing prompts array");
 

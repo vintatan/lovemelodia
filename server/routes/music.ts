@@ -3,10 +3,10 @@ import { nanoid } from "nanoid";
 import {
   getOrCreateUserAsync, deductCreditsAsync, getCredits,
   createMusicJob, getMusicJob, updateMusicJob, addCreditsAsync,
-  getMusicJobsByPhone, renameMusicJob,
+  getMusicJobsByPhone, renameMusicJob, getNovelSummariesForPhone,
 } from "../lib/db.js";
 import { generateMusic } from "../lib/lyria.js";
-import { enhanceMusicPrompt, generateEnhancedPromptWithTimepoints } from "../lib/anthropic.js";
+import { generateEnhancedPromptWithTimepoints } from "../lib/anthropic.js";
 import { logCost, calculateLyriaCost, calculateClaudeCost } from "../lib/cost-logger.js";
 import { generationRateLimit } from "../middleware/rateLimit.js";
 import { createMusicJobInSupabase, updateMusicJobInSupabase } from "../lib/supabase.js";
@@ -20,7 +20,7 @@ router.post("/enhance-prompt", async (req, res) => {
     return res.status(400).json({ error: "Prompt atau genre wajib diisi" });
   }
   try {
-    const { enhancedPrompt, timepoints, inputTokens, outputTokens } = await generateEnhancedPromptWithTimepoints({
+    const { enhancedPrompt, lyrics, timepoints, inputTokens, outputTokens } = await generateEnhancedPromptWithTimepoints({
       genres: genres ?? [],
       userDescription: prompt?.trim() ?? "",
     });
@@ -32,7 +32,7 @@ router.post("/enhance-prompt", async (req, res) => {
       inputTokens,
       outputTokens,
     });
-    return res.json({ enhancedPrompt, timepoints });
+    return res.json({ enhancedPrompt, lyrics, timepoints });
   } catch (err: any) {
     return res.status(500).json({ error: err.message ?? "Gagal enhance prompt" });
   }
@@ -49,8 +49,8 @@ router.patch("/rename/:jobId", async (req, res) => {
 
 router.post("/generate", generationRateLimit, async (req, res) => {
   const phone = req.user!.phone;
-  const { prompt, genres, title: clientTitle, enhancedPrompt: clientEnhancedPrompt, timepoints: clientTimepoints } = req.body as {
-    prompt?: string; genres?: string[]; title?: string; enhancedPrompt?: string; timepoints?: unknown[];
+  const { prompt, genres, title: clientTitle, enhancedPrompt: clientEnhancedPrompt, timepoints: clientTimepoints, lyrics: clientLyrics } = req.body as {
+    prompt?: string; genres?: string[]; title?: string; enhancedPrompt?: string; timepoints?: unknown[]; lyrics?: string;
   };
 
   if (!prompt?.trim() && (!genres || genres.length === 0)) {
@@ -74,7 +74,7 @@ router.post("/generate", generationRateLimit, async (req, res) => {
   const rawPrompt = prompt?.trim() ?? "";
   const timepointsJson = clientTimepoints && clientTimepoints.length > 0 ? JSON.stringify(clientTimepoints) : undefined;
   const title = clientTitle?.trim().slice(0, 100) || undefined;
-  createMusicJob(jobId, phone, rawPrompt || (genres ?? []).join(", "), title, clientEnhancedPrompt, timepointsJson);
+  createMusicJob(jobId, phone, rawPrompt || (genres ?? []).join(", "), title, clientEnhancedPrompt, timepointsJson, clientLyrics);
   void createMusicJobInSupabase({ id: jobId, phone, prompt: rawPrompt || (genres ?? []).join(", "), enhanced_prompt: clientEnhancedPrompt });
 
   (async () => {
@@ -83,9 +83,11 @@ router.post("/generate", generationRateLimit, async (req, res) => {
       void updateMusicJobInSupabase(jobId, "generating");
 
       let enhancedPrompt = clientEnhancedPrompt;
+      let lyrics = clientLyrics;
       if (!enhancedPrompt) {
-        const result = await enhanceMusicPrompt({ genres: genres ?? [], userDescription: rawPrompt });
+        const result = await generateEnhancedPromptWithTimepoints({ genres: genres ?? [], userDescription: rawPrompt });
         enhancedPrompt = result.enhancedPrompt;
+        lyrics = lyrics ?? result.lyrics;
         logCost({
           phone,
           service: "claude",
@@ -98,8 +100,8 @@ router.post("/generate", generationRateLimit, async (req, res) => {
 
       const audioUrl = await generateMusic(enhancedPrompt);
       logCost({ phone, service: "wavespeed", operation: "generateMusic", costUsd: calculateLyriaCost() });
-      updateMusicJob(jobId, "completed", audioUrl, undefined, enhancedPrompt);
-      void updateMusicJobInSupabase(jobId, "completed", audioUrl, null, enhancedPrompt);
+      updateMusicJob(jobId, "completed", audioUrl, undefined, enhancedPrompt, undefined, lyrics);
+      void updateMusicJobInSupabase(jobId, "completed", audioUrl, null, enhancedPrompt, lyrics);
     } catch (err: any) {
       console.error(`[Music] Job ${jobId} failed:`, err);
       updateMusicJob(jobId, "failed", undefined, err.message ?? "Generasi musik gagal");
@@ -130,7 +132,12 @@ router.get("/status/:jobId", async (req, res) => {
 router.get("/history", (req, res) => {
   const phone = req.user!.phone;
   const jobs = getMusicJobsByPhone(phone);
-  return res.json({ jobs });
+  const novelMap = getNovelSummariesForPhone(phone);
+  const jobsWithNovel = jobs.map(j => ({
+    ...j,
+    novel: novelMap[j.id] ?? null,
+  }));
+  return res.json({ jobs: jobsWithNovel });
 });
 
 export default router;
