@@ -1,8 +1,12 @@
 const MUSIC_ENDPOINT = "https://api.wavespeed.ai/api/v3/google/lyria-3-pro/music";
 
+const INDONESIAN_PREFIX = "Indonesian language song, bahasa Indonesia vocals and lyrics, indie sound, natural organic production, authentic feel. ";
+
 export async function generateMusic(prompt: string): Promise<string> {
   const apiKey = process.env.WAVESPEED_API_KEY;
   if (!apiKey) throw new Error("WAVESPEED_API_KEY not set");
+
+  const finalPrompt = prompt.toLowerCase().includes("indonesian") ? prompt : INDONESIAN_PREFIX + prompt;
 
   const submitRes = await fetch(MUSIC_ENDPOINT, {
     method: "POST",
@@ -10,7 +14,7 @@ export async function generateMusic(prompt: string): Promise<string> {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt: finalPrompt }),
   });
 
   if (!submitRes.ok) {

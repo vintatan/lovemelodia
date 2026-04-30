@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { apiFetch } from "../../lib/api.ts";
 import ShareButtons from "./ShareButtons.tsx";
+import NovelCreator from "./NovelCreator.tsx";
 
 const GENRES = ["Pop", "Electronic", "Jazz", "Tradisional", "Rock", "Cinematic", "R&B", "Lo-fi"];
 
@@ -164,13 +165,19 @@ const MOOD_COLORS: Record<string, string> = {
 
 export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp }: MusicCreatorProps) {
   const [prompt, setPrompt] = useState("");
+  const [title, setTitle] = useState("");
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [phase, setPhase] = useState<"idle" | "generating" | "done" | "error">("idle");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [showNovel, setShowNovel] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [enhancedPrompt, setEnhancedPrompt] = useState<string | null>(null);
   const [timepoints, setTimepoints] = useState<MusicTimepoint[]>([]);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [savingTitle, setSavingTitle] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoFilledRef = useRef<string>("");
 
@@ -227,6 +234,21 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
     }
   }
 
+  async function handleSaveTitle() {
+    if (!currentJobId || !draftTitle.trim()) return;
+    setSavingTitle(true);
+    try {
+      await apiFetch(`/api/music/rename/${currentJobId}`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ title: draftTitle.trim() }),
+      });
+      setTitle(draftTitle.trim());
+    } catch { /* ignore */ } finally {
+      setSavingTitle(false);
+      setEditingTitle(false);
+    }
+  }
+
   async function handleGenerate() {
     const finalPrompt = prompt.trim();
     if (!finalPrompt && selectedGenres.length === 0) return;
@@ -239,11 +261,12 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
     try {
       const res = await apiFetch("/api/music/generate", token, {
         method: "POST",
-        body: JSON.stringify({ prompt: finalPrompt, genres: selectedGenres, enhancedPrompt }),
+        body: JSON.stringify({ prompt: finalPrompt, genres: selectedGenres, title: title.trim() || undefined, enhancedPrompt, timepoints: timepoints.length > 0 ? timepoints : undefined }),
       });
       const data = await res.json() as { jobId?: string; creditsRemaining?: number; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Gagal memulai generasi");
       if (data.creditsRemaining !== undefined) onCreditsUpdate(data.creditsRemaining);
+      setCurrentJobId(data.jobId!);
       pollStatus(data.jobId!);
     } catch (err: any) {
       setPhase("error");
@@ -292,12 +315,18 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
     stopPolling();
     setPhase("idle");
     setAudioUrl(null);
+    setCurrentJobId(null);
+    setShowNovel(false);
     setErrorMsg("");
+    setTitle("");
     setEnhancedPrompt(null);
     setTimepoints([]);
+    setEditingTitle(false);
   }
 
-  const canGenerate = prompt.trim().length > 0 || selectedGenres.length > 0;
+  const hasInput = prompt.trim().length > 0 || selectedGenres.length > 0;
+  const canEnhance = hasInput && !enhancing;
+  const canGenerate = timepoints.length > 0;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 py-2">
@@ -314,6 +343,21 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
         {/* ── IDLE / FORM ── */}
         {phase === "idle" && (
           <motion.div key="form" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }} className="space-y-5">
+
+            {/* Title */}
+            <div className="space-y-2">
+              <p className="label-caps text-[var(--text-faint)]">Judul Lagu</p>
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="Nama lagumu (opsional)..."
+                maxLength={100}
+                className="w-full card-elevated px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-faint)] focus:outline-none transition-colors"
+                style={{ borderRadius: "1rem" }}
+                onFocus={e => (e.target.style.borderColor = "rgba(255,45,85,0.35)")}
+                onBlur={e => (e.target.style.borderColor = "")}
+              />
+            </div>
 
             {/* Genre chips */}
             <div className="space-y-2.5">
@@ -362,24 +406,26 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
                 onBlur={e => (e.target.style.borderColor = "")}
               />
               <div className="flex items-center justify-between gap-2">
-                <button
-                  onClick={() => void handleEnhance()}
-                  disabled={enhancing || (!prompt.trim() && selectedGenres.length === 0)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 disabled:opacity-40"
-                  style={{
-                    background: "rgba(255,45,85,0.12)",
-                    color: "var(--accent-red)",
-                    border: "1px solid rgba(255,45,85,0.25)",
-                  }}
-                >
-                  {enhancing ? (
-                    <svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                    </svg>
-                  ) : "✨"}
-                  {enhancing ? "Enhancing..." : "Perkuat Prompt"}
-                </button>
                 <span className="text-xs text-[var(--text-faint)]">{prompt.length}/450</span>
+                {timepoints.length > 0 && (
+                  <button
+                    onClick={() => void handleEnhance()}
+                    disabled={!canEnhance}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 disabled:opacity-40"
+                    style={{
+                      background: "rgba(255,45,85,0.08)",
+                      color: "var(--accent-red)",
+                      border: "1px solid rgba(255,45,85,0.2)",
+                    }}
+                  >
+                    {enhancing ? (
+                      <svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                      </svg>
+                    ) : "✨"}
+                    {enhancing ? "Memperbarui..." : "Ubah Alur"}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -419,29 +465,57 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
               )}
             </AnimatePresence>
 
-            {/* Credit info row */}
-            <div className="flex items-center justify-between text-xs px-0.5">
-              <span className="text-[var(--text-muted)]">
-                Biaya: <span className="font-bold" style={{ color: "var(--accent-red)" }}>10 kredit</span>
-              </span>
-              <span className="text-[var(--text-muted)]">
-                Saldo: <span className={credits < 10 ? "text-red-400 font-bold" : "text-[var(--text-primary)] font-medium"}>{credits} kredit</span>
-              </span>
-            </div>
-
-            {credits < 10 ? (
-              <button onClick={onTopUp} className="w-full py-3.5 rounded-2xl text-white font-bold text-sm bg-gradient-warm shadow-glow-amber">
-                Top Up Kredit dulu yuk 🪙
-              </button>
-            ) : (
-              <button
-                onClick={handleGenerate}
-                disabled={!canGenerate}
-                className="btn-primary w-full rounded-2xl py-4 text-sm"
-              >
-                Gas Bikin Musik 🎵
-              </button>
-            )}
+            {/* Step CTA — enhance first, then generate */}
+            <AnimatePresence mode="wait">
+              {!canGenerate ? (
+                <motion.button
+                  key="enhance-cta"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  onClick={() => void handleEnhance()}
+                  disabled={!canEnhance}
+                  className="btn-primary w-full rounded-2xl py-4 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {enhancing ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                      </svg>
+                      Menyusun alur dramatis...
+                    </span>
+                  ) : (
+                    <span>✨ Perkuat Prompt dulu</span>
+                  )}
+                </motion.button>
+              ) : (
+                <motion.div
+                  key="generate-cta"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className="space-y-3"
+                >
+                  <div className="flex items-center justify-between text-xs px-0.5">
+                    <span className="text-[var(--text-muted)]">
+                      Biaya: <span className="font-bold" style={{ color: "var(--accent-red)" }}>10 kredit</span>
+                    </span>
+                    <span className="text-[var(--text-muted)]">
+                      Saldo: <span className={credits < 10 ? "text-red-400 font-bold" : "text-[var(--text-primary)] font-medium"}>{credits} kredit</span>
+                    </span>
+                  </div>
+                  {credits < 10 ? (
+                    <button onClick={onTopUp} className="w-full py-3.5 rounded-2xl text-white font-bold text-sm bg-gradient-warm shadow-glow-amber">
+                      Top Up Kredit dulu yuk 🪙
+                    </button>
+                  ) : (
+                    <button onClick={handleGenerate} className="btn-primary w-full rounded-2xl py-4 text-sm">
+                      Gas Bikin Musik 🎵
+                    </button>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
 
@@ -482,9 +556,41 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
         {/* ── DONE ── */}
         {phase === "done" && audioUrl && (
           <motion.div key="done" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }} className="space-y-5">
-            <div className="text-center space-y-1">
+            <div className="text-center space-y-2">
               <div className="text-4xl spring-in">🎉</div>
-              <p className="font-bold text-[var(--text-primary)] mt-2">Musikmu udah jadi!</p>
+
+              {/* Editable title */}
+              {editingTitle ? (
+                <div className="flex items-center gap-2 justify-center">
+                  <input
+                    autoFocus
+                    value={draftTitle}
+                    onChange={e => setDraftTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") void handleSaveTitle(); if (e.key === "Escape") setEditingTitle(false); }}
+                    maxLength={100}
+                    className="card-elevated px-3 py-1.5 text-sm font-bold text-[var(--text-primary)] focus:outline-none text-center"
+                    style={{ borderRadius: "0.75rem", borderColor: "rgba(255,45,85,0.35)", minWidth: 0, width: "12rem" }}
+                  />
+                  <button onClick={() => void handleSaveTitle()} disabled={savingTitle} className="text-xs px-3 py-1.5 rounded-xl font-semibold text-white bg-gradient-red disabled:opacity-50">
+                    {savingTitle ? "..." : "Simpan"}
+                  </button>
+                  <button onClick={() => setEditingTitle(false)} className="text-xs text-[var(--text-faint)] hover:text-[var(--text-muted)]">Batal</button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setDraftTitle(title || ""); setEditingTitle(true); }}
+                  className="group flex items-center gap-1.5 mx-auto"
+                >
+                  <p className="font-bold text-[var(--text-primary)]">
+                    {title || "Musikmu udah jadi!"}
+                  </p>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent-red)" strokeWidth="2.5" className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              )}
+
               <p className="text-sm text-[var(--text-muted)]">Gokil kan? Sekarang dengerin & share! 🔥</p>
             </div>
 
@@ -504,6 +610,49 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
               </svg>
               Download Musik
             </button>
+
+            {/* Novel Musik CTA */}
+            <AnimatePresence>
+              {!showNovel && (
+                <motion.button
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowNovel(true)}
+                  className="w-full py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.01] active:scale-[0.98]"
+                  style={{
+                    background: "linear-gradient(135deg, #7c3aed 0%, #db2777 100%)",
+                    boxShadow: "0 0 20px rgba(124,58,237,0.35)",
+                  }}
+                >
+                  Bikin Novel Musik 🎬
+                </motion.button>
+              )}
+            </AnimatePresence>
+
+            {/* NovelCreator panel */}
+            <AnimatePresence>
+              {showNovel && currentJobId && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  <div className="card-elevated p-4 space-y-4" style={{ borderRadius: "1.25rem" }}>
+                    <NovelCreator
+                      musicJobId={currentJobId}
+                      token={token}
+                      credits={credits}
+                      onCreditsUpdate={onCreditsUpdate}
+                      onTopUp={onTopUp}
+                      onClose={() => setShowNovel(false)}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <button onClick={handleReset} className="w-full py-3 rounded-2xl text-sm text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors">
               Bikin lagu baru lagi →

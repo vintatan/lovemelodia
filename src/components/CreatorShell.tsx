@@ -3,13 +3,16 @@ import { motion, AnimatePresence } from "motion/react";
 import CreditsBadge from "./CreditsBadge.tsx";
 import CreditsModal from "./CreditsModal.tsx";
 import MusicCreator from "./music/MusicCreator.tsx";
+import MusicHistory from "./music/MusicHistory.tsx";
+import NovelTab from "./music/NovelTab.tsx";
 
-type Mode = "music" | "novel" | "video";
+type Mode = "music" | "history" | "novel" | "video";
 
 const MODES: { id: Mode; icon: string; label: string; soon?: boolean }[] = [
-  { id: "music",  icon: "🎵", label: "Musik" },
-  { id: "novel",  icon: "📖", label: "Musik Novel", soon: true },
-  { id: "video",  icon: "🎬", label: "Musik Video", soon: true },
+  { id: "music",   icon: "🎵", label: "Musik" },
+  { id: "history", icon: "🕓", label: "Riwayat" },
+  { id: "novel",   icon: "📖", label: "Musik Novel" },
+  { id: "video",   icon: "🎬", label: "Musik Video", soon: true },
 ];
 
 interface CreatorShellProps {
@@ -19,7 +22,7 @@ interface CreatorShellProps {
   onCreditsUpdate: (n: number) => void;
 }
 
-export default function CreatorShell({ token, phone: _phone, credits, onCreditsUpdate }: CreatorShellProps) {
+export default function CreatorShell({ token, phone, credits, onCreditsUpdate }: CreatorShellProps) {
   const [mode, setMode] = useState<Mode>("music");
   const [creditsModalOpen, setCreditsModalOpen] = useState(false);
 
@@ -42,14 +45,14 @@ export default function CreatorShell({ token, phone: _phone, credits, onCreditsU
       </header>
 
       {/* Mode tabs */}
-      <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/60">
+      <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/60 overflow-x-auto">
         {MODES.map(m => {
           const isActive = m.id === mode;
           return (
             <button
               key={m.id}
               onClick={() => setMode(m.id)}
-              className={`relative flex-1 flex items-center justify-center gap-1.5 px-3 py-3.5 text-sm font-medium transition-all duration-200 ${
+              className={`relative flex-shrink-0 flex items-center justify-center gap-1.5 px-3 py-3.5 text-sm font-medium transition-all duration-200 ${
                 isActive
                   ? "text-[var(--accent-red)]"
                   : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
@@ -88,9 +91,20 @@ export default function CreatorShell({ token, phone: _phone, credits, onCreditsU
             </motion.div>
           )}
 
+          {mode === "history" && (
+            <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}>
+              <MusicHistory token={token} phone={phone} />
+            </motion.div>
+          )}
+
           {mode === "novel" && (
             <motion.div key="novel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22 }}>
-              <ComingSoon icon="📖" title="Musik Novel" desc="Musikmu bakal jadi storyboard visual yang gokil. Setiap beat punya visual sendiri." teaser="Bikin musik dulu, lalu kita visualisasi ceritanya" color="var(--accent-amber)" />
+              <NovelTab
+                token={token}
+                credits={credits}
+                onCreditsUpdate={onCreditsUpdate}
+                onTopUp={() => setCreditsModalOpen(true)}
+              />
             </motion.div>
           )}
 

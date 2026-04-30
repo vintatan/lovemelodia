@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import {
   getOrCreateUserAsync, deductCreditsAsync, getCredits,
   createMusicJob, getMusicJob, updateMusicJob, addCreditsAsync,
-  getMusicJobsByPhone,
+  getMusicJobsByPhone, renameMusicJob,
 } from "../lib/db.js";
 import { generateMusic } from "../lib/lyria.js";
 import { enhanceMusicPrompt, generateEnhancedPromptWithTimepoints } from "../lib/anthropic.js";
@@ -38,10 +38,19 @@ router.post("/enhance-prompt", async (req, res) => {
   }
 });
 
+router.patch("/rename/:jobId", async (req, res) => {
+  const phone = req.user!.phone;
+  const { title } = req.body as { title?: string };
+  if (!title?.trim()) return res.status(400).json({ error: "Judul wajib diisi" });
+  const updated = renameMusicJob(req.params.jobId, phone, title.trim().slice(0, 100));
+  if (!updated) return res.status(404).json({ error: "Job tidak ditemukan" });
+  return res.json({ ok: true });
+});
+
 router.post("/generate", generationRateLimit, async (req, res) => {
   const phone = req.user!.phone;
-  const { prompt, genres, enhancedPrompt: clientEnhancedPrompt } = req.body as {
-    prompt?: string; genres?: string[]; enhancedPrompt?: string;
+  const { prompt, genres, title: clientTitle, enhancedPrompt: clientEnhancedPrompt, timepoints: clientTimepoints } = req.body as {
+    prompt?: string; genres?: string[]; title?: string; enhancedPrompt?: string; timepoints?: unknown[];
   };
 
   if (!prompt?.trim() && (!genres || genres.length === 0)) {
@@ -63,7 +72,9 @@ router.post("/generate", generationRateLimit, async (req, res) => {
 
   const jobId = nanoid();
   const rawPrompt = prompt?.trim() ?? "";
-  createMusicJob(jobId, phone, rawPrompt || (genres ?? []).join(", "), clientEnhancedPrompt);
+  const timepointsJson = clientTimepoints && clientTimepoints.length > 0 ? JSON.stringify(clientTimepoints) : undefined;
+  const title = clientTitle?.trim().slice(0, 100) || undefined;
+  createMusicJob(jobId, phone, rawPrompt || (genres ?? []).join(", "), title, clientEnhancedPrompt, timepointsJson);
   void createMusicJobInSupabase({ id: jobId, phone, prompt: rawPrompt || (genres ?? []).join(", "), enhanced_prompt: clientEnhancedPrompt });
 
   (async () => {

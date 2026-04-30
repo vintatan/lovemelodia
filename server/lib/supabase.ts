@@ -121,6 +121,42 @@ export async function updateMusicJobInSupabase(id: string, status: string, audio
   }
 }
 
+export async function createNovelJobInSupabase(job: {
+  id: string; musicJobId: string; phone: string;
+}): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from("novel_jobs").upsert(
+      { id: job.id, music_job_id: job.musicJobId, phone: job.phone,
+        status: "pending", credits_used: 50, created_at: new Date().toISOString() },
+      { onConflict: "id", ignoreDuplicates: true }
+    );
+  } catch (err) {
+    console.error("[Supabase] createNovelJob error:", err);
+  }
+}
+
+export async function updateNovelJobInSupabase(
+  id: string,
+  status: string,
+  imageUrls?: string[] | null,
+  videoUrl?: string | null,
+  error?: string | null,
+  timepointsJson?: string | null,
+): Promise<void> {
+  if (!supabase) return;
+  try {
+    const updates: Record<string, unknown> = { status };
+    if (imageUrls !== undefined) updates.image_urls_json = imageUrls ? JSON.stringify(imageUrls) : null;
+    if (videoUrl !== undefined) updates.video_url = videoUrl;
+    if (error !== undefined) updates.error = error;
+    if (timepointsJson !== undefined) updates.timepoints_json = timepointsJson;
+    await supabase.from("novel_jobs").update(updates).eq("id", id);
+  } catch (err) {
+    console.error("[Supabase] updateNovelJob error:", err);
+  }
+}
+
 export function trackPaymentCompleted(tx: {
   external_id?: string; phone: string; package_name: string;
   credits: number; amount: number; currency: string;

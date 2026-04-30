@@ -44,10 +44,12 @@ export async function enhanceMusicPrompt(params: {
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 512,
-    system: `You are a professional music producer creating engaging Indonesian songs.
+    system: `You are a professional music producer creating engaging Indonesian indie songs.
 Transform user input into a clean, safe music generation prompt suitable for all audiences.
 Rules:
 - Write exactly 2-4 sentences in English (for the music AI model)
+- ALWAYS start with "Indonesian language vocals and lyrics," — this is non-negotiable
+- Lean toward indie, organic, natural production: acoustic or semi-acoustic textures, warm character, authentic feel — avoid over-polished or overly electronic sounds unless the genre demands it
 - Describe genre, tempo (BPM range), key instruments, mood, and production style
 - Include Indonesian musical flavors when relevant (gamelan, angklung, keroncong, dangdut)
 - Always end with "approximately 2 to 3 minutes in duration"
@@ -90,14 +92,14 @@ export async function generateEnhancedPromptWithTimepoints(params: {
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
-    system: `Kamu adalah music director yang ahli membuat lagu untuk audiens Indonesia.
+    system: `Kamu adalah music director yang ahli membuat lagu indie Indonesia yang natural dan otentik.
 Dari deskripsi vibe pengguna, buat:
 1. Enhanced prompt dalam bahasa Inggris (untuk AI music model) — deskripsi musikal yang bersih dan netral
 2. Dramatic timepoints dalam bahasa Indonesia — momen struktural lagu yang menarik
 
 Respons HANYA berupa JSON valid (tanpa markdown, tanpa penjelasan lain):
 {
-  "enhancedPrompt": "2-4 kalimat Inggris: genre, BPM, instrumen, mood, production style. Gunakan bahasa netral dan aman. Diakhiri dengan 'approximately 2 to 3 minutes in duration'",
+  "enhancedPrompt": "2-4 kalimat Inggris: genre, BPM, instrumen, mood, production style. WAJIB diawali dengan 'Indonesian language vocals and lyrics,' dan WAJIB mengandung nuansa indie yang natural dan organik. Diakhiri dengan 'approximately 2 to 3 minutes in duration'",
   "timepoints": [
     {
       "timestamp": "0:00",
@@ -111,6 +113,8 @@ Respons HANYA berupa JSON valid (tanpa markdown, tanpa penjelasan lain):
 Rules:
 - 6-8 timepoints untuk lagu ~2 menit
 - Timestamp pertama "0:00" label "Intro", terakhir label "Outro"
+- enhancedPrompt WAJIB dimulai dengan "Indonesian language vocals and lyrics," — tidak boleh dihilangkan
+- Selalu dorong ke arah: indie, akustik/semi-akustik, produksi natural dan hangat, feel otentik — hindari suara over-produced atau terlalu elektronik kecuali genre menuntut itu
 - enhancedPrompt: hanya elemen musikal (instrumen, tempo, kunci, mood, tekstur) — tidak ada kata eksplisit, keras, atau sensitif
 - Fokus pada audio/musik bukan visual`,
     messages: [{
@@ -201,6 +205,92 @@ Generate the enhanced production prompt and 6-8 timepoints with dramatic sync.`;
 
   return {
     result: parsed,
+    inputTokens: msg.usage.input_tokens,
+    outputTokens: msg.usage.output_tokens,
+  };
+}
+
+export async function generateCharacterDescription(params: {
+  songTitle: string | null;
+  songDescription: string;
+  enhancedMusicPrompt: string;
+  genres: string[];
+}): Promise<string> {
+  const { songTitle, songDescription, enhancedMusicPrompt, genres } = params;
+
+  const msg = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 256,
+    system: `You are a character designer for music video storyboards.
+Create a single concise portrait prompt for an AI image generator.
+The character must visually reflect the song's theme, mood, and story — not just the music genre.
+Rules:
+- One paragraph, max 60 words
+- Describe a specific Indonesian person whose look, outfit, and expression embody the song's narrative
+- Include: age range, gender, distinctive features, outfit that fits the song's theme, emotional expression
+- Style: photorealistic portrait, natural lighting, sharp focus, beautiful, 8k
+- No violence, no explicit content
+- Output ONLY the prompt text, nothing else`,
+    messages: [{
+      role: "user",
+      content: `Song title: ${songTitle ?? "(untitled)"}
+Song theme/description: ${songDescription}
+Music production style: ${enhancedMusicPrompt}
+Genres: ${genres.length > 0 ? genres.join(", ") : "indie"}`,
+    }],
+  });
+
+  return (msg.content[0] as { text: string }).text.trim();
+}
+
+export async function generateStoryboardImagePrompts(params: {
+  songTitle: string | null;
+  songDescription: string;
+  enhancedMusicPrompt: string;
+  timepoints: Array<{ timestamp: string; label: string; description: string; mood: string }>;
+  genres: string[];
+}): Promise<{ prompts: string[]; inputTokens: number; outputTokens: number }> {
+  const { songTitle, songDescription, enhancedMusicPrompt, timepoints, genres } = params;
+
+  const msg = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1024,
+    system: `You are a cinematic storyboard director for music videos.
+Translate each scene description into an English image prompt that is VISUALLY TIED to the song's specific theme, title, and narrative.
+Every prompt must feel like it belongs to THIS song — not a generic music video.
+Each prompt must be: photorealistic, beautiful, high quality, cinematic, 8k, sharp focus, atmospheric, emotionally resonant.
+Always include: specific lighting (golden hour / neon / moonlight etc), color grade, depth of field, location relevant to the song's story.
+The main character will be composited in via reference — describe ENVIRONMENT and MOOD, not the character's face.
+Safe, clean content only. Landscape 16:9 widescreen composition.
+Respond ONLY with valid JSON: { "prompts": ["prompt1", "prompt2", ...] }`,
+    messages: [{
+      role: "user",
+      content: `Song title: ${songTitle ?? "(untitled)"}
+Song theme/description: ${songDescription}
+Music production style: ${enhancedMusicPrompt}
+${genres.length > 0 ? `Genres: ${genres.join(", ")}` : ""}
+
+Timepoints:
+${timepoints.map((tp, i) => `${i + 1}. [${tp.timestamp}] ${tp.label} (${tp.mood}): ${tp.description}`).join("\n")}
+
+Generate one English cinematic image prompt per timepoint. Each scene must visually reflect the song's title and theme. Landscape widescreen, photorealistic, beautiful, cinematic lighting, 8k.`,
+    }],
+  });
+
+  const rawText = (msg.content[0] as { text: string }).text.trim();
+  let parsed: { prompts: string[] };
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    const match = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (match) parsed = JSON.parse(match[1]);
+    else throw new Error(`Claude returned non-JSON for storyboard prompts: ${rawText.slice(0, 200)}`);
+  }
+
+  if (!Array.isArray(parsed.prompts)) throw new Error("Claude response missing prompts array");
+
+  return {
+    prompts: parsed.prompts,
     inputTokens: msg.usage.input_tokens,
     outputTokens: msg.usage.output_tokens,
   };
