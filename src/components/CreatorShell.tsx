@@ -75,7 +75,7 @@ export default function CreatorShell({ token, phone: _phone, credits, onCreditsU
       </div>
 
       {/* Content */}
-      <main className="flex-1 px-4 py-6 overflow-y-auto">
+      <main className="flex-1 px-4 sm:px-8 lg:px-12 py-6 overflow-y-auto">
         <AnimatePresence mode="wait">
           {mode === "music" && (
             <motion.div key="music" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}>
