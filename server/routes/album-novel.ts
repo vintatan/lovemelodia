@@ -7,7 +7,7 @@ import {
   createAlbumNovelJob, getAlbumNovelJob, updateAlbumNovelJob,
 } from "../lib/db.js";
 import { generateSongUnderstanding, generateStoryboardImagePrompts, generateEnhancedPromptWithTimepoints } from "../lib/anthropic.js";
-import { generateNanoBananaImage, generateCharacterPortrait } from "../lib/wavespeed-nano.js";
+import { generateSceneImage } from "../lib/wavespeed-nano.js";
 import { assembleVideo, concatenateVideos, cleanupTmpDir } from "../lib/ffmpeg.js";
 import { uploadToGcs } from "../lib/gcs.js";
 import { logCost, calculateClaudeCost } from "../lib/cost-logger.js";
@@ -104,16 +104,10 @@ async function buildSongVideo(musicJob: MusicJob, phone: string): Promise<string
 
   logCost({ phone, service: "claude", operation: "generateSongUnderstandingForAlbumNovel", costUsd: calculateClaudeCost("claude-haiku-4-5-20251001", 400, 120) });
 
-  const [charImageUrl, { prompts, inputTokens: pIn, outputTokens: pOut }] = await Promise.all([
-    generateCharacterPortrait(
-      songUnderstanding?.characterPortraitPrompt ||
-      `photorealistic portrait of an attractive young Indonesian woman, 20s, striking features, expressive eyes, soft cinematic lighting, shallow depth of field, beautiful, editorial quality, 8k`
-    ),
-    generateStoryboardImagePrompts({
-      songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
-      timepoints: timepoints3, genres: [], lyrics: songLyrics, songUnderstanding,
-    }),
-  ]);
+  const { prompts, inputTokens: pIn, outputTokens: pOut } = await generateStoryboardImagePrompts({
+    songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
+    timepoints: timepoints3, genres: [], lyrics: songLyrics, songUnderstanding,
+  });
 
   logCost({
     phone, service: "claude", operation: "generateStoryboardPromptsForAlbumNovel",
@@ -124,11 +118,11 @@ async function buildSongVideo(musicJob: MusicJob, phone: string): Promise<string
   // Generate images in parallel (up to 3)
   const imageUrls = await Promise.all(
     timepoints3.map(async (tp, i) => {
-      const fullPrompt = prompts[i] ?? "cinematic scene, atmospheric lighting, photorealistic, beautiful, 8k";
-      return generateNanoBananaImage(fullPrompt, charImageUrl).catch(async (err) => {
-        console.warn(`[AlbumNovel] image ${i} rejected, retrying. Error: ${err.message}`);
-        const fallback = `${tp.mood} cinematic scene, atmospheric lighting, photorealistic, 8k`;
-        return generateNanoBananaImage(fallback, charImageUrl);
+      const fullPrompt = prompts[i] ?? "cinematic landscape, atmospheric lighting, beautiful, 8k";
+      return generateSceneImage(fullPrompt).catch(async (err) => {
+        console.warn(`[AlbumNovel] image ${i} failed, retrying. Error: ${err.message}`);
+        const fallback = `${tp.mood} cinematic landscape, atmospheric lighting, beautiful`;
+        return generateSceneImage(fallback);
       });
     })
   );

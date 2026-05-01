@@ -233,7 +233,7 @@ Generate the enhanced production prompt and 6-8 timepoints with dramatic sync.`;
 
 export interface SongUnderstanding {
   singerGender: "female" | "male" | "neutral";
-  characterPortraitPrompt: string;
+  visualAtmosphere: string;
   keyVisuals: string[];
   setting: string;
   coreTheme: string;
@@ -251,27 +251,26 @@ export async function generateSongUnderstanding(params: {
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 512,
-    system: `You are a music video creative director. Analyze a song to extract visual and narrative intelligence that drives image generation.
-Read ALL available information (title, description, production notes, lyrics, timepoints) to deeply understand the song.
+    system: `You are a fine art photography director for music videos. Analyze a song to extract visual intelligence that drives stunning non-person photography.
+Read ALL available information (title, description, production notes, lyrics, timepoints) to deeply understand the song's world.
 Respond ONLY with valid JSON — no markdown, no explanation:
 {
   "singerGender": "female OR male OR neutral",
-  "characterPortraitPrompt": "max 70 words. Attractive Indonesian [gender], 20s, striking features (smooth skin, expressive eyes, defined jawline or soft feminine face). Outfit, hair, and makeup pulled directly from the song's world and emotional tone. Emotional expression that mirrors the song's core feeling. Photorealistic portrait, soft cinematic lighting, shallow depth of field, beautiful, editorial quality, 8k. MUST state gender explicitly.",
-  "keyVisuals": ["3-5 concrete visual elements pulled from the lyrics/narrative — specific objects, locations, actions"],
-  "setting": "specific primary environment (e.g. 'rain-soaked Jakarta rooftop at 3am', not just 'city')",
+  "visualAtmosphere": "max 50 words. Describe the overall visual mood, color temperature, lighting quality, and atmosphere of the song's world. Focus on colors, textures, light, and environment — NO people. E.g. 'Warm golden-hour haze over crumbling Jakarta streets, dusty amber and moss green palette, soft rain bokeh, intimate and melancholic'.",
+  "keyVisuals": ["3-5 concrete visual elements pulled from the lyrics — specific objects, places, weather, time of day, textures, natural phenomena"],
+  "setting": "specific primary environment (e.g. 'rain-soaked rooftop garden at 3am, Jakarta', not just 'city')",
   "coreTheme": "one sentence: what this song is fundamentally about"
 }
 
 Rules:
-- singerGender: infer from lyric pronouns, emotional perspective, and narrative voice. Indonesian lyrics: check for feminine/masculine framing.
-- characterPortraitPrompt: reflect the song's specific world. Pull appearance details (outfit, hair, expression) directly from lyric imagery. The character must feel like they belong in this song's universe — not generic. Always attractive and visually compelling.
-- keyVisuals: be concrete and specific — pull from lyric metaphors, objects, places, and actions named in the song.
-- setting: be evocative and specific, matching the emotional geography of the song.
+- singerGender: infer from lyric pronouns and narrative voice (used for context only, NOT for generating people).
+- visualAtmosphere: the COLOR + LIGHT + TEXTURE + EMOTIONAL QUALITY of the song's world. No human descriptions. Think like a cinematographer setting a mood board.
+- keyVisuals: concrete, lyric-grounded — pull specific objects, places, and natural imagery that appear in the song. Avoid abstractions.
+- setting: evocative and specific, matching the emotional geography of the song.
 CONTENT SAFETY — ABSOLUTE RULES (never break these):
-- NO sexual content, nudity, revealing clothing, suggestive poses, or romantic/physical intimacy
-- NO violence, weapons, blood, gore, or threatening imagery
-- NO dark, disturbing, horror, or explicit content of any kind
-- All output must be safe for all ages and suitable for general audiences`,
+- NO references to people, bodies, faces, or any human presence
+- NO sexual content, violence, weapons, blood, gore, disturbing, or horror content
+- All output must be safe for all ages`,
     messages: [{
       role: "user",
       content: `Song title: ${songTitle ?? "(untitled)"}
@@ -286,8 +285,8 @@ ${timepoints.map((tp, i) => `${i + 1}. [${tp.timestamp}] ${tp.label} (${tp.mood}
   const rawText = (msg.content[0] as { text: string }).text.trim();
   const parsed = parseClaudeJson<SongUnderstanding>(rawText, "generateSongUnderstanding returned non-JSON");
   return {
-    singerGender: parsed.singerGender ?? "female",
-    characterPortraitPrompt: parsed.characterPortraitPrompt ?? "photorealistic portrait of an attractive young Indonesian woman, 20s, striking features, expressive eyes, soft cinematic lighting, shallow depth of field, beautiful, editorial quality, 8k",
+    singerGender: parsed.singerGender ?? "neutral",
+    visualAtmosphere: parsed.visualAtmosphere ?? "",
     keyVisuals: Array.isArray(parsed.keyVisuals) ? parsed.keyVisuals : [],
     setting: parsed.setting ?? "",
     coreTheme: parsed.coreTheme ?? "",
@@ -396,27 +395,25 @@ export async function generateStoryboardImagePrompts(params: {
   const { songTitle, songDescription, enhancedMusicPrompt, timepoints, genres, lyrics, songUnderstanding } = params;
 
   const understandingBlock = songUnderstanding
-    ? `\nSong understanding:\n- Theme: ${songUnderstanding.coreTheme}\n- Setting: ${songUnderstanding.setting}\n- Key visuals from song: ${songUnderstanding.keyVisuals.join(", ")}`
+    ? `\nSong understanding:\n- Theme: ${songUnderstanding.coreTheme}\n- Setting: ${songUnderstanding.setting}\n- Visual atmosphere: ${songUnderstanding.visualAtmosphere}\n- Key visuals from song: ${songUnderstanding.keyVisuals.join(", ")}`
     : "";
 
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
-    system: `You are a surrealist music video director. Translate each lyric moment into a stunning, photorealistic image prompt.
+    system: `You are a fine art photographer creating a visual album for a music release. Translate each lyric moment into a beautiful photographic image — NO people at all.
 
 Rules:
+- ABSOLUTELY NO people, faces, humans, figures, silhouettes, hands, or any body parts
+- Focus exclusively on: landscapes, nature, cityscapes, architecture, interiors, objects, light phenomena, weather, flora, fauna, textures, abstract patterns
 - Landscape 16:9 cinematic widescreen composition
-- Each prompt must be a beautiful, surreal, emotionally resonant scene DIRECTLY inspired by the lyrics at that exact moment
-- Ground scenes in concrete lyric imagery: specific objects, places, metaphors, and actions named in the song
-- Character may appear loosely — as silhouette, back view, partial figure, or purely atmospheric presence — never the main focus
-- Emphasize: dramatic lighting, rich color palette, visual poetry, depth of field, surreal or dreamlike elements that mirror the emotional tone
+- Each prompt must be emotionally resonant and DIRECTLY inspired by the lyrics at that exact moment — use specific imagery from the song
+- Emphasize: dramatic lighting, rich color palette, depth of field, surreal or dreamlike atmosphere
+- Ground every image in the song's visual world: specific places, objects, times of day, weather, and natural phenomena from the lyrics
 - Max 80 words per prompt
-CONTENT SAFETY — ABSOLUTE RULES (never break these, no exceptions):
-- NO sexual content, nudity, revealing clothing, suggestive or intimate scenes
-- NO violence, weapons, blood, gore, fighting, or threatening imagery
-- NO dark, disturbing, horror, scary, or psychologically distressing imagery
-- NO alcohol, drugs, or illegal activity
-- All scenes must be wholesome, positive, and suitable for all ages
+CONTENT SAFETY — ABSOLUTE RULES (never break these):
+- NO violence, weapons, blood, gore, disturbing, horror, or dark content
+- All scenes must be beautiful, positive, and suitable for all ages
 Respond ONLY with valid JSON: { "prompts": ["prompt1", "prompt2", ...] }`,
     messages: [{
       role: "user",
