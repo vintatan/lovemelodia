@@ -401,31 +401,32 @@ export async function generateStoryboardImagePrompts(params: {
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
-    system: `You are a fine art photographer creating a visual album for a music release. Translate each lyric moment into a beautiful photographic image — NO people at all.
+    system: `You are a music video art director. Your job is to translate specific lyric moments into photographic image prompts. Every image MUST be visually grounded in THIS song — its exact words, places, objects, and emotional narrative.
 
-Rules:
-- ABSOLUTELY NO people, faces, humans, figures, silhouettes, hands, or any body parts
-- Focus exclusively on: landscapes, nature, cityscapes, architecture, interiors, objects, light phenomena, weather, flora, fauna, textures, abstract patterns
-- Landscape 16:9 cinematic widescreen composition
-- Each prompt must be emotionally resonant and DIRECTLY inspired by the lyrics at that exact moment — use specific imagery from the song
-- Emphasize: dramatic lighting, rich color palette, depth of field, surreal or dreamlike atmosphere
-- Ground every image in the song's visual world: specific places, objects, times of day, weather, and natural phenomena from the lyrics
+SONG-GROUNDING IS THE ONLY RULE THAT MATTERS:
+- Read the lyrics carefully. Pull named locations, objects, metaphors, textures, and imagery DIRECTLY from the text.
+- Each prompt illustrates THAT SPECIFIC TIMEPOINT — the exact lyric moment described, not a generic mood.
+- Use the song's setting, key visuals, and atmosphere as your visual vocabulary. Do not invent imagery not connected to the song.
+- A fan who knows the song must immediately recognize the scene. If the lyric says "empty coffee cup by the window at 2am", show that — not a generic rainy street.
+
+Visual execution (secondary to song-grounding):
+- NO people, faces, humans, figures, silhouettes, hands, or body parts
+- Landscape 16:9 cinematic widescreen
+- Beautiful, photorealistic or painterly, cinematic lighting
 - Max 80 words per prompt
-CONTENT SAFETY — ABSOLUTE RULES (never break these):
-- NO violence, weapons, blood, gore, disturbing, horror, or dark content
-- All scenes must be beautiful, positive, and suitable for all ages
+- NO violence, blood, gore, disturbing, or dark content
+
 Respond ONLY with valid JSON: { "prompts": ["prompt1", "prompt2", ...] }`,
     messages: [{
       role: "user",
       content: `Song title: ${songTitle ?? "(untitled)"}
 Song description: ${songDescription}
-Production style: ${enhancedMusicPrompt}
-${genres.length > 0 ? `Genres: ${genres.join(", ")}` : ""}${understandingBlock}${lyrics ? `\n\nLyrics:\n${lyrics}` : ""}
+${genres.length > 0 ? `Genres: ${genres.join(", ")}` : ""}${understandingBlock}${lyrics ? `\n\nFull lyrics (USE THESE as your primary source of visual imagery):\n${lyrics}` : ""}
 
-Timepoints:
+Timepoints to illustrate:
 ${timepoints.map((tp, i) => `${i + 1}. [${tp.timestamp}] ${tp.label} (${tp.mood}): ${tp.description}`).join("\n")}
 
-Generate one English image prompt per timepoint. Each scene must be a visual poem for that lyric moment — surreal, beautiful, cinematic. Ground every image in the song's specific imagery and emotional world.`,
+Generate one English image prompt per timepoint. Each prompt must use SPECIFIC imagery from the lyrics and song world — objects, places, metaphors named in the song. Generic scenes are wrong. Song-grounded scenes are right.`,
     }],
   });
 
