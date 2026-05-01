@@ -78,9 +78,9 @@ export default function Stage1Form({ onSubmit, loading }: Stage1FormProps) {
             onClick={() => fileRef.current?.click()}
             onDrop={handleDrop}
             onDragOver={e => e.preventDefault()}
-            className="border-2 border-dashed border-[var(--border-accent)] rounded-xl p-6 text-center cursor-pointer hover:bg-[var(--bg-elevated)] transition-colors"
+            className="border-2 border-dashed border-[var(--accent-red)]/30 hover:border-[var(--accent-red)]/60 hover:bg-[var(--accent-red)]/5 rounded-xl p-6 text-center cursor-pointer transition-all duration-200 group"
           >
-            <Upload className="w-6 h-6 text-[var(--accent-violet)] mx-auto mb-2" />
+            <Upload className="w-6 h-6 text-[var(--accent-red)]/60 group-hover:text-[var(--accent-red)] mx-auto mb-2 transition-colors" />
             <p className="text-xs text-[var(--text-muted)]">Drop photo or click to upload</p>
             <p className="text-xs text-[var(--text-faint)] mt-1">Ensures character consistency across scenes</p>
           </div>
@@ -105,14 +105,14 @@ export default function Stage1Form({ onSubmit, loading }: Stage1FormProps) {
             <button
               key={t.id}
               onClick={() => setTheme(t.id)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-sm transition-all ${
+              className={`flex flex-col items-center gap-1.5 p-3.5 rounded-xl border text-sm transition-all duration-200 ${
                 theme === t.id
-                  ? "border-[var(--accent-violet)] bg-violet-500/10 text-[var(--text-primary)]"
-                  : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]"
+                  ? "border-[var(--accent-red)]/60 bg-[var(--accent-red)]/10 text-[var(--text-primary)] shadow-[0_0_12px_rgba(255,45,85,0.15)]"
+                  : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-[var(--accent-red)]/30 hover:bg-[var(--bg-elevated)]"
               }`}
             >
-              <span className="text-lg">{t.emoji}</span>
-              <span className="text-xs">{t.label}</span>
+              <span className="text-xl">{t.emoji}</span>
+              <span className="text-xs font-medium">{t.label}</span>
             </button>
           ))}
         </div>

@@ -13,6 +13,7 @@ import stage2Router from "./routes/stage2.js";
 import stage3Router from "./routes/stage3.js";
 import musicRouter from "./routes/music.js";
 import novelRouter, { novelVideoProxy } from "./routes/novel.js";
+import publicRouter from "./routes/public.js";
 import { requireAuth } from "./middleware/auth.js";
 import { getStaleAssemblyJobs, addCreditsAsync } from "./lib/db.js";
 import { ensureBucketPublicAccess } from "./lib/gcs.js";
@@ -71,6 +72,7 @@ app.use("/api/music", requireAuth, musicRouter);
 app.get("/api/novel/video/:jobId", novelVideoProxy);
 app.use("/api/novel", requireAuth, novelRouter);
 
+app.use("/api/public", publicRouter);
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 // Serve Vite build in production

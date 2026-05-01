@@ -113,6 +113,7 @@ export async function generateEnhancedPromptWithTimepoints(params: {
   genres: string[];
   userDescription: string;
 }): Promise<{
+  title: string;
   enhancedPrompt: string;
   lyrics: string;
   timepoints: MusicTimepoint[];
@@ -132,6 +133,7 @@ Dari deskripsi vibe pengguna, buat:
 
 Respons HANYA berupa JSON valid (tanpa markdown, tanpa penjelasan lain):
 {
+  "title": "Judul lagu dalam Bahasa Indonesia — singkat, puitis, max 6 kata, tanpa tanda kutip",
   "enhancedPrompt": "2-4 kalimat Inggris: genre, BPM, instrumen, mood, production style. WAJIB diawali dengan 'Indonesian language vocals and lyrics,' dan WAJIB mengandung nuansa indie yang natural dan organik. Diakhiri dengan 'approximately 2 to 3 minutes in duration'",
   "lyrics": "[Verse 1]\\n...\\n\\n[Pre-Chorus]\\n...\\n\\n[Chorus]\\n...\\n\\n[Verse 2]\\n...\\n\\n[Chorus]\\n...\\n\\n[Outro]\\n...",
   "timepoints": [
@@ -163,13 +165,14 @@ Buat enhanced prompt + lirik lengkap + dramatic timepoints.`,
   });
 
   const rawText = (msg.content[0] as { text: string }).text.trim();
-  const parsed = parseClaudeJson<{ enhancedPrompt: string; lyrics: string; timepoints: MusicTimepoint[] }>(rawText, "Claude returned non-JSON");
+  const parsed = parseClaudeJson<{ title?: string; enhancedPrompt: string; lyrics: string; timepoints: MusicTimepoint[] }>(rawText, "Claude returned non-JSON");
 
   if (!parsed.enhancedPrompt || !Array.isArray(parsed.timepoints)) {
     throw new Error("Claude response missing required fields");
   }
 
   return {
+    title: parsed.title?.trim() ?? "",
     enhancedPrompt: parsed.enhancedPrompt,
     lyrics: parsed.lyrics ?? "",
     timepoints: parsed.timepoints,

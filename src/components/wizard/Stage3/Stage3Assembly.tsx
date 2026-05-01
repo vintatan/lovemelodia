@@ -87,9 +87,10 @@ interface Stage3Props {
   projectId: string;
   assemblyJobId: string;
   token: string;
+  onCreditsInsufficient?: () => void;
 }
 
-export default function Stage3Assembly({ projectId, assemblyJobId, token }: Stage3Props) {
+export default function Stage3Assembly({ projectId, assemblyJobId, token, onCreditsInsufficient }: Stage3Props) {
   const [status, setStatus] = useState<AssemblyStatus>("generating_music");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -185,11 +186,10 @@ export default function Stage3Assembly({ projectId, assemblyJobId, token }: Stag
 
       <FilmStripProgress currentStatus={status} />
 
-      <div className="flex justify-between text-xs text-[var(--text-faint)] -mt-4 px-0.5">
-        <span>Music</span>
-        <span>Assemble</span>
-        <span>Upload</span>
-        <span>Done</span>
+      <div className="flex -mt-4">
+        {["Music", "Assemble", "Upload", "Done"].map(label => (
+          <span key={label} className="flex-1 text-center text-xs text-[var(--text-faint)]">{label}</span>
+        ))}
       </div>
 
       {videoUrl && (

@@ -203,8 +203,6 @@ export async function getOrCreateUserAsync(phone: string): Promise<{ phone: stri
   if (existing) return existing;
   try {
     stmts.insertUser.run(phone);
-    // New user gets 100 free credits (per Jagat AI credits policy)
-    stmts.addCredits.run(100, phone);
   } catch (err: any) {
     if (!err?.message?.includes("UNIQUE")) throw err;
   }
@@ -215,8 +213,7 @@ export function getOrCreateUser(phone: string): { phone: string; credits: number
   const existing = stmts.getUser.get(phone) as { phone: string; credits: number } | undefined;
   if (existing) return existing;
   stmts.insertUser.run(phone);
-  stmts.addCredits.run(100, phone);
-  return { phone, credits: 100 };
+  return { phone, credits: 0 };
 }
 
 export function getCredits(phone: string): number {
@@ -543,6 +540,99 @@ export function getNovelJobsByPhone(phone: string) {
     image_urls_json: string | null; video_url: string | null; error: string | null;
     credits_used: number; created_at: number;
   }>;
+}
+
+export interface ShowcaseItem {
+  type: "video" | "audio";
+  title: string;
+  theme: string | null;
+  url: string;
+  music_url: string | null;
+}
+
+const showcaseVideosStmt = db.prepare(`
+  SELECT 'video' as type,
+    COALESCE(music_vibe, theme, 'Musik AI') as title,
+    theme,
+    video_url as url,
+    music_url
+  FROM projects
+  WHERE status = 'completed' AND video_url IS NOT NULL
+  ORDER BY stage3_completed_at DESC
+  LIMIT 8
+`);
+
+const showcaseAudioStmt = db.prepare(`
+  SELECT 'audio' as type,
+    COALESCE(title, prompt, 'Musik AI') as title,
+    NULL as theme,
+    audio_url as url,
+    NULL as music_url
+  FROM music_jobs
+  WHERE status = 'completed' AND audio_url IS NOT NULL
+  ORDER BY created_at DESC
+  LIMIT 8
+`);
+
+// ── Social proof stats ──────────────────────────────────────────────────────
+
+const INDO_NAMES = ["Budi","Siti","Rina","Dian","Agus","Dewi","Reza","Fitri","Andi","Maya","Bayu","Nisa","Fajar","Lina","Rizki","Ayu","Hendra","Putri","Yudi","Sari","Joko","Wulan","Eko","Tari","Doni","Rini","Wahyu","Indah","Fandi","Citra"];
+const INDO_CITIES = ["Jakarta","Surabaya","Bandung","Medan","Bekasi","Tangerang","Depok","Semarang","Makassar","Palembang","Bogor","Pekanbaru","Denpasar","Yogyakarta","Malang","Balikpapan","Padang","Batam","Banjarmasin","Pontianak"];
+
+function deriveDisplayName(phone: string): { name: string; city: string } {
+  const digits = phone.replace(/\D/g, "");
+  const nameIdx = parseInt(digits.slice(-3) || "0") % INDO_NAMES.length;
+  const cityIdx = parseInt(digits.slice(-6, -3) || "0") % INDO_CITIES.length;
+  return { name: INDO_NAMES[nameIdx], city: INDO_CITIES[cityIdx] };
+}
+
+const creatorCountStmt = db.prepare("SELECT COUNT(*) as count FROM users");
+const recentJoinersStmt = db.prepare("SELECT phone, created_at FROM users ORDER BY created_at DESC LIMIT 15");
+const recentPurchasesStmt = db.prepare("SELECT phone, package_name, paid_at FROM transactions WHERE status = 'PAID' ORDER BY paid_at DESC LIMIT 10");
+
+export interface SocialProofItem {
+  name: string;
+  city: string;
+  action: string;
+  package?: string;
+}
+
+export function getSocialProof(): { creatorCount: number; recentActivity: SocialProofItem[] } {
+  const { count } = creatorCountStmt.get() as { count: number };
+  const joiners = recentJoinersStmt.all() as { phone: string; created_at: number }[];
+  const purchases = recentPurchasesStmt.all() as { phone: string; package_name: string; paid_at: number }[];
+
+  // Merge joiners and purchases into a deduplicated, time-sorted list
+  const merged: { phone: string; at: number; action: string; package?: string }[] = [
+    ...joiners.map(j => ({ phone: j.phone, at: j.created_at, action: "bergabung" })),
+    ...purchases.map(p => ({ phone: p.phone, at: p.paid_at ?? 0, action: "upgrade", package: p.package_name })),
+  ];
+  merged.sort((a, b) => b.at - a.at);
+
+  // Deduplicate by phone, keep most recent action
+  const seen = new Set<string>();
+  const activity: SocialProofItem[] = [];
+  for (const item of merged) {
+    if (seen.has(item.phone)) continue;
+    seen.add(item.phone);
+    const { name, city } = deriveDisplayName(item.phone);
+    activity.push({ name, city, action: item.action, package: item.package });
+    if (activity.length >= 15) break;
+  }
+
+  return { creatorCount: Math.max(count, 50), recentActivity: activity };
+}
+
+export function getShowcaseItems(): ShowcaseItem[] {
+  const videos = showcaseVideosStmt.all() as ShowcaseItem[];
+  const audio = showcaseAudioStmt.all() as ShowcaseItem[];
+  const result: ShowcaseItem[] = [];
+  const max = Math.max(videos.length, audio.length);
+  for (let i = 0; i < max; i++) {
+    if (videos[i]) result.push(videos[i]);
+    if (audio[i]) result.push(audio[i]);
+  }
+  return result.slice(0, 12);
 }
 
 export default db;

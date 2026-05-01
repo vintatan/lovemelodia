@@ -25,10 +25,10 @@ router.post("/assemble", async (req, res) => {
   }
 
   const rawFrames = JSON.parse(project.frames_json) as Array<{ timepointIndex: number; imageUrl: string } | null>;
-  if (rawFrames.some(f => f === null)) {
-    return res.status(400).json({ error: "Not all frames completed" });
+  const frames = rawFrames.filter(f => f !== null) as Array<{ timepointIndex: number; imageUrl: string }>;
+  if (frames.length < 3) {
+    return res.status(400).json({ error: "Need at least 3 frames completed" });
   }
-  const frames = rawFrames as Array<{ timepointIndex: number; imageUrl: string }>;
 
   const deducted = await deductCreditsAsync(phone, STAGE3_CREDITS);
   if (!deducted) {
@@ -68,11 +68,12 @@ async function runAssembly(params: {
     const musicGcsUrl = await uploadUrlToGcs(musicUrlRaw, "audio/wav", "music", phone) ?? musicUrlRaw;
     updateAssemblyJob(assemblyJobId, "assembling_video", musicGcsUrl);
 
-    // Step 2: Assemble video
-    const timepoints = JSON.parse(project.timepoints_json!) as Timepoint[];
+    // Step 2: Assemble video — use only the generated frames with their matching timepoints
+    const allTimepoints = JSON.parse(project.timepoints_json!) as Timepoint[];
     const frameUrls = frames.map(f => f.imageUrl);
+    const frameTimepoints = frames.map(f => allTimepoints[f.timepointIndex]);
 
-    tmpOutputPath = await assembleVideo({ frameUrls, musicUrl: musicGcsUrl, timepoints });
+    tmpOutputPath = await assembleVideo({ frameUrls, musicUrl: musicGcsUrl, timepoints: frameTimepoints });
 
     // Step 3: Upload final video to GCS
     updateAssemblyJob(assemblyJobId, "uploading", musicGcsUrl);

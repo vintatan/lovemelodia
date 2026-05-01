@@ -225,11 +225,12 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
         method: "POST",
         body: JSON.stringify({ prompt: rawPrompt, genres: selectedGenres }),
       });
-      const data = await res.json() as { enhancedPrompt?: string; lyrics?: string; timepoints?: MusicTimepoint[]; error?: string };
+      const data = await res.json() as { title?: string; enhancedPrompt?: string; lyrics?: string; timepoints?: MusicTimepoint[]; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Gagal enhance prompt");
       setEnhancedPrompt(data.enhancedPrompt ?? null);
       setLyrics(data.lyrics ?? null);
       setTimepoints(data.timepoints ?? []);
+      if (data.title && !title.trim()) setTitle(data.title);
     } catch (err: any) {
       console.error("Enhance failed:", err.message);
     } finally {
@@ -255,7 +256,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
   async function handleGenerate() {
     const finalPrompt = prompt.trim();
     if (!finalPrompt && selectedGenres.length === 0) return;
-    if (credits < 10) { onTopUp(); return; }
+    if (credits < 20) { onTopUp(); return; }
 
     setPhase("generating");
     setErrorMsg("");
@@ -267,6 +268,7 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
         body: JSON.stringify({ prompt: finalPrompt, genres: selectedGenres, title: title.trim() || undefined, enhancedPrompt, lyrics, timepoints: timepoints.length > 0 ? timepoints : undefined }),
       });
       const data = await res.json() as { jobId?: string; creditsRemaining?: number; error?: string };
+      if (res.status === 402) { onTopUp(); return; }
       if (!res.ok) throw new Error(data.error ?? "Gagal memulai generasi");
       if (data.creditsRemaining !== undefined) onCreditsUpdate(data.creditsRemaining);
       setCurrentJobId(data.jobId!);
