@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import {
   getOrCreateUserAsync, deductCreditsAsync, getCredits,
   createMusicJob, getMusicJob, updateMusicJob, addCreditsAsync,
-  getMusicJobsByPhone, renameMusicJob, getNovelSummariesForPhone,
+  getMusicJobsByPhone, renameMusicJob, getNovelSummariesForPhone, getAlbumMapForPhone,
 } from "../lib/db.js";
 import { generateMusic } from "../lib/lyria.js";
 import { generateEnhancedPromptWithTimepoints } from "../lib/anthropic.js";
@@ -125,6 +125,10 @@ router.get("/status/:jobId", async (req, res) => {
   return res.json({
     status: job.status,
     audioUrl: job.audio_url,
+    enhancedPrompt: job.enhanced_prompt,
+    lyrics: job.lyrics,
+    timepoints: job.timepoints_json ? JSON.parse(job.timepoints_json) : null,
+    title: job.title,
     error: job.error,
   });
 });
@@ -133,11 +137,13 @@ router.get("/history", (req, res) => {
   const phone = req.user!.phone;
   const jobs = getMusicJobsByPhone(phone);
   const novelMap = getNovelSummariesForPhone(phone);
-  const jobsWithNovel = jobs.map(j => ({
+  const albumMap = getAlbumMapForPhone(phone);
+  const jobsWithMeta = jobs.map(j => ({
     ...j,
     novel: novelMap[j.id] ?? null,
+    album: albumMap[j.id] ?? null,
   }));
-  return res.json({ jobs: jobsWithNovel });
+  return res.json({ jobs: jobsWithMeta });
 });
 
 export default router;
