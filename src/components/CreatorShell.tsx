@@ -41,14 +41,7 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
 
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] sticky top-0 z-20 bg-[var(--bg-primary)]/90 backdrop-blur-xl">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-gradient-red flex items-center justify-center shadow-glow">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
-              <path d="M9 18V5l12-2v13M6 21a3 3 0 100-6 3 3 0 000 6zm12-2a3 3 0 100-6 3 3 0 000 6z"/>
-            </svg>
-          </div>
-          <h1 className="heading-display text-sm text-gradient-studio">KREASI AI</h1>
-        </div>
+        <img src="/logo.png" alt="Kreasi AI" className="h-7 object-contain" style={{ mixBlendMode: "screen" }} />
         <CreditsBadge credits={credits} onTopUp={() => setCreditsModalOpen(true)} />
       </header>
 

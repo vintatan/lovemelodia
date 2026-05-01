@@ -49,13 +49,8 @@ export default function LandingPage({ onStart }: LandingPageProps) {
         <nav className="border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/80 backdrop-blur-xl">
         <div className="h-[2px] rainbow-line" />
         <div className="flex items-center justify-between px-5 sm:px-8 lg:px-12 py-3.5 max-w-7xl mx-auto">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-red flex items-center justify-center shadow-glow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                <path d="M9 18V5l12-2v13M6 21a3 3 0 100-6 3 3 0 000 6zm12-2a3 3 0 100-6 3 3 0 000 6z"/>
-              </svg>
-            </div>
-            <span className="heading-display text-base text-gradient-studio">KREASI AI</span>
+          <div className="flex items-center">
+            <img src="/logo.png" alt="Kreasi AI" className="h-8 object-contain" style={{ mixBlendMode: "screen" }} />
           </div>
           <button onClick={onStart} className="btn-primary py-2 px-5 text-sm rounded-xl">
             Mulai Gratis →
