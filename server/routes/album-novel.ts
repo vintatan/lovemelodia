@@ -151,7 +151,53 @@ async function buildSongVideo(musicJob: MusicJob, phone: string): Promise<string
   }
 }
 
-// ── POST /api/album-novel/generate ───────────────────────────────────────────
+// ── Shared pipeline (used by both album and custom multi-song routes) ─────────
+
+async function runNovelPipeline(novelJobId: string, songs: MusicJob[], phone: string, creditsRequired: number): Promise<void> {
+  try {
+    const videoUrls: (string | null)[] = new Array(songs.length).fill(null);
+
+    const tasks = songs.map((musicJob, idx) => async () => {
+      console.log(`[AlbumNovel] Processing song ${idx + 1}/${songs.length}: ${musicJob.id}`);
+      const url = await buildSongVideo(musicJob, phone);
+      videoUrls[idx] = url;
+      const done = videoUrls.filter(Boolean).length;
+      updateAlbumNovelJob(novelJobId, "generating", done);
+      console.log(`[AlbumNovel] Song ${idx + 1} done (${done}/${songs.length})`);
+      return url;
+    });
+
+    await runCapped(tasks, 3);
+
+    const validUrls = videoUrls.filter((u): u is string => u !== null);
+    if (validUrls.length === 0) throw new Error("Tidak ada video yang berhasil dibuat");
+
+    updateAlbumNovelJob(novelJobId, "concatenating", validUrls.length);
+    console.log(`[AlbumNovel] Concatenating ${validUrls.length} videos for job ${novelJobId}`);
+
+    const concatPath = await concatenateVideos(validUrls);
+    const concatDir = path.dirname(concatPath);
+
+    let finalVideoUrl: string;
+    try {
+      const buf = await readFile(concatPath);
+      const uploaded = await uploadToGcs(buf, "video/mp4", "novels/album-final", phone);
+      if (!uploaded) throw new Error("Upload video final gagal");
+      finalVideoUrl = uploaded;
+    } finally {
+      await cleanupTmpDir(concatDir);
+    }
+
+    updateAlbumNovelJob(novelJobId, "completed", validUrls.length, finalVideoUrl);
+    console.log(`[AlbumNovel] Job ${novelJobId} completed: ${finalVideoUrl}`);
+  } catch (err: any) {
+    console.error(`[AlbumNovel] Job ${novelJobId} failed:`, err);
+    updateAlbumNovelJob(novelJobId, "failed", undefined, undefined, err.message ?? "Gagal buat novel");
+    await addCreditsAsync(phone, creditsRequired, "refund").catch(() => {});
+  }
+}
+
+// ── POST /api/album-novel/generate — from album ───────────────────────────────
 
 router.post("/generate", async (req, res) => {
   const phone = req.user!.phone;
@@ -184,50 +230,46 @@ router.post("/generate", async (req, res) => {
 
   const novelJobId = nanoid();
   createAlbumNovelJob(novelJobId, albumId, phone, creditsRequired, songs.length);
+  void runNovelPipeline(novelJobId, songs, phone, creditsRequired);
 
-  (async () => {
-    try {
-      const videoUrls: (string | null)[] = new Array(songs.length).fill(null);
+  return res.status(202).json({ novelJobId, creditsRemaining: getCredits(phone) });
+});
 
-      const tasks = songs.map((musicJob, idx) => async () => {
-        console.log(`[AlbumNovel] Processing song ${idx + 1}/${songs.length}: ${musicJob.id}`);
-        const url = await buildSongVideo(musicJob, phone);
-        videoUrls[idx] = url;
-        const done = videoUrls.filter(Boolean).length;
-        updateAlbumNovelJob(novelJobId, "generating", done);
-        console.log(`[AlbumNovel] Song ${idx + 1} done (${done}/${songs.length})`);
-        return url;
-      });
+// ── POST /api/album-novel/generate-from-songs — custom multi-song selection ──
 
-      await runCapped(tasks, 3);
+router.post("/generate-from-songs", async (req, res) => {
+  const phone = req.user!.phone;
+  const { musicJobIds } = req.body as { musicJobIds?: string[] };
 
-      const validUrls = videoUrls.filter((u): u is string => u !== null);
-      if (validUrls.length === 0) throw new Error("Tidak ada video yang berhasil dibuat");
+  if (!Array.isArray(musicJobIds) || musicJobIds.length < 2) {
+    return res.status(400).json({ error: "Pilih minimal 2 lagu" });
+  }
+  if (musicJobIds.length > 20) {
+    return res.status(400).json({ error: "Maksimal 20 lagu sekaligus" });
+  }
 
-      updateAlbumNovelJob(novelJobId, "concatenating", validUrls.length);
-      console.log(`[AlbumNovel] Concatenating ${validUrls.length} videos for job ${novelJobId}`);
+  const songs = musicJobIds.map(id => getMusicJob(id)).filter((j): j is MusicJob => !!j);
+  if (songs.some(s => s.phone !== phone)) return res.status(403).json({ error: "Akses ditolak" });
 
-      const concatPath = await concatenateVideos(validUrls);
-      const concatDir = path.dirname(concatPath);
+  const incomplete = songs.filter(s => s.status !== "completed" || !s.audio_url);
+  if (incomplete.length > 0) {
+    return res.status(400).json({ error: "Semua lagu harus selesai dulu" });
+  }
 
-      let finalVideoUrl: string;
-      try {
-        const buf = await readFile(concatPath);
-        const uploaded = await uploadToGcs(buf, "video/mp4", "novels/album-final", phone);
-        if (!uploaded) throw new Error("Upload video final gagal");
-        finalVideoUrl = uploaded;
-      } finally {
-        await cleanupTmpDir(concatDir);
-      }
+  const creditsRequired = ALBUM_NOVEL_CREDITS_PER_SONG * songs.length;
+  const user = await getOrCreateUserAsync(phone);
+  if (user.credits < creditsRequired) {
+    return res.status(402).json({ error: "Kredit tidak cukup", credits: user.credits, required: creditsRequired });
+  }
 
-      updateAlbumNovelJob(novelJobId, "completed", validUrls.length, finalVideoUrl);
-      console.log(`[AlbumNovel] Job ${novelJobId} completed: ${finalVideoUrl}`);
-    } catch (err: any) {
-      console.error(`[AlbumNovel] Job ${novelJobId} failed:`, err);
-      updateAlbumNovelJob(novelJobId, "failed", undefined, undefined, err.message ?? "Gagal buat album novel");
-      await addCreditsAsync(phone, creditsRequired, "refund").catch(() => {});
-    }
-  })();
+  const deducted = await deductCreditsAsync(phone, creditsRequired);
+  if (!deducted) {
+    return res.status(402).json({ error: "Kredit tidak cukup", credits: getCredits(phone), required: creditsRequired });
+  }
+
+  const novelJobId = nanoid();
+  createAlbumNovelJob(novelJobId, "multi", phone, creditsRequired, songs.length);
+  void runNovelPipeline(novelJobId, songs, phone, creditsRequired);
 
   return res.status(202).json({ novelJobId, creditsRemaining: getCredits(phone) });
 });
