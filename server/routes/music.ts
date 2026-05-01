@@ -12,7 +12,7 @@ import { generationRateLimit } from "../middleware/rateLimit.js";
 import { createMusicJobInSupabase, updateMusicJobInSupabase } from "../lib/supabase.js";
 
 const router = Router();
-const MUSIC_CREDITS = 10;
+const MUSIC_CREDITS = 20;
 
 router.post("/enhance-prompt", async (req, res) => {
   const { prompt, genres } = req.body as { prompt?: string; genres?: string[] };
@@ -20,7 +20,7 @@ router.post("/enhance-prompt", async (req, res) => {
     return res.status(400).json({ error: "Prompt atau genre wajib diisi" });
   }
   try {
-    const { enhancedPrompt, lyrics, timepoints, inputTokens, outputTokens } = await generateEnhancedPromptWithTimepoints({
+    const { title, enhancedPrompt, lyrics, timepoints, inputTokens, outputTokens } = await generateEnhancedPromptWithTimepoints({
       genres: genres ?? [],
       userDescription: prompt?.trim() ?? "",
     });
@@ -32,7 +32,7 @@ router.post("/enhance-prompt", async (req, res) => {
       inputTokens,
       outputTokens,
     });
-    return res.json({ enhancedPrompt, lyrics, timepoints });
+    return res.json({ title, enhancedPrompt, lyrics, timepoints });
   } catch (err: any) {
     return res.status(500).json({ error: err.message ?? "Gagal enhance prompt" });
   }

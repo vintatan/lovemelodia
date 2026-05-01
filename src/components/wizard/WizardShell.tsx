@@ -107,6 +107,7 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
         throw new Error(d.error ?? "Approve failed");
       }
       const data = await assembleRes.json() as { assemblyJobId?: string; error?: string };
+      if (assembleRes.status === 402) { onTopUp(); return; }
       if (!assembleRes.ok) throw new Error(data.error ?? "Assembly failed to start");
       setAssemblyJobId(data.assemblyJobId!);
       onCreditsUpdate(credits - 30);
@@ -122,7 +123,14 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
   return (
     <div className="min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] sticky top-0 z-20 bg-[var(--bg-primary)]/90 backdrop-blur-md">
-        <h1 className="heading-display text-base text-gradient-studio">Kreasi AI</h1>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-gradient-red flex items-center justify-center shadow-glow">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+              <path d="M9 18V5l12-2v13M6 21a3 3 0 100-6 3 3 0 000 6zm12-2a3 3 0 100-6 3 3 0 000 6z"/>
+            </svg>
+          </div>
+          <h1 className="heading-display text-base text-gradient-studio">Kreasi AI</h1>
+        </div>
         <CreditsBadge credits={credits} onTopUp={onTopUp} />
       </header>
 
@@ -142,24 +150,31 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
             <div
               key={s}
               className={`relative flex-1 min-w-fit px-3 py-2.5 text-center transition-all duration-300 ${
-                isActive ? "text-[var(--accent-violet)]" :
+                isActive ? "text-[var(--accent-red)]" :
                 isDone   ? "text-[var(--text-muted)]" :
                            "text-[var(--text-faint)]"
               }`}
             >
-              <span className="text-xs whitespace-nowrap">
+              {isActive && (
+                <motion.div
+                  layoutId="tab-bg"
+                  className="absolute inset-x-1 inset-y-1 rounded-lg bg-[var(--accent-red)]/8"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
+              <span className="relative text-xs whitespace-nowrap">
                 <span className="mr-1 font-mono">{STEP_ICONS[s]}</span>
                 {STEP_LABELS[s]}
               </span>
               {isActive && (
                 <motion.div
                   layoutId="step-indicator"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-violet)]"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-red"
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
               {isDone && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-violet)]/30" />
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-red)]/30" />
               )}
             </div>
           );
@@ -203,6 +218,7 @@ export default function WizardShell({ token, phone, credits, onCreditsUpdate, on
                 projectId={projectId!}
                 assemblyJobId={assemblyJobId}
                 token={token}
+                onCreditsInsufficient={onTopUp}
               />
             )}
           </motion.div>

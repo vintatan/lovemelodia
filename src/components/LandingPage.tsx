@@ -1,5 +1,7 @@
 import { useRef } from "react";
 import { motion } from "motion/react";
+import ShowcaseCarousel from "./ShowcaseCarousel.tsx";
+import TopBanner from "./TopBanner.tsx";
 
 const YT_VIDEO_ID = "5gxn7Lho9yg";
 const YT_CHANNEL   = "https://www.youtube.com/@ImajiAI-z8k";
@@ -39,8 +41,12 @@ export default function LandingPage({ onStart }: LandingPageProps) {
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: "var(--bg-primary)" }}>
 
-      {/* ── Navbar ─────────────────────────────────────────────── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/80 backdrop-blur-xl">
+      {/* ── Top Banner ─────────────────────────────────────────── */}
+      <div className="fixed top-0 left-0 right-0 z-50">
+        <TopBanner onStart={onStart} />
+
+        {/* ── Navbar ───────────────────────────────────────────── */}
+        <nav className="border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/80 backdrop-blur-xl">
         <div className="h-[2px] rainbow-line" />
         <div className="flex items-center justify-between px-5 sm:px-8 lg:px-12 py-3.5 max-w-7xl mx-auto">
           <div className="flex items-center gap-2.5">
@@ -55,10 +61,12 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             Mulai Gratis →
           </button>
         </div>
-      </nav>
+        </nav>
+      </div>
 
       {/* ── Hero ───────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-5 sm:px-8 pt-24 pb-16 text-center overflow-hidden">
+      {/* pt accounts for: banner (~36px) + navbar (~57px) = ~93px → use pt-28 */}
+      <section className="relative min-h-screen flex flex-col items-center justify-center px-5 sm:px-8 pt-28 pb-16 text-center overflow-hidden">
         <FloatingOrb style={{ width: 700, height: 700, top: 0, left: "50%", transform: "translateX(-50%)", background: "radial-gradient(circle at 50% 30%, rgba(255,45,85,0.13) 0%, transparent 65%)", animation: "float-y 7s ease-in-out infinite" }} />
         <FloatingOrb style={{ width: 400, height: 400, top: "25%", right: "-8%", background: "radial-gradient(circle, rgba(251,146,60,0.1) 0%, transparent 70%)", animation: "float-y 9s ease-in-out infinite 2s" }} />
         <FloatingOrb style={{ width: 300, height: 300, bottom: "18%", left: "-5%", background: "radial-gradient(circle, rgba(220,38,38,0.09) 0%, transparent 70%)", animation: "float-y 6s ease-in-out infinite 1s" }} />
@@ -129,7 +137,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             transition={{ delay: 0.75 }}
             className="flex flex-wrap items-center justify-center gap-2"
           >
-            {["✓ 100 kredit gratis", "✓ Tanpa kartu kredit", "✓ Langsung jadi"].map(t => (
+            {["✓ Langsung jadi", "✓ Tanpa studio", "✓ Musik AI original"].map(t => (
               <span key={t} className="text-xs text-[var(--text-faint)] px-3 py-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">{t}</span>
             ))}
           </motion.div>
@@ -213,6 +221,35 @@ export default function LandingPage({ onStart }: LandingPageProps) {
 
       <div className="section-rule mx-5 sm:mx-8 lg:mx-12" />
 
+      {/* ── Showcase Carousel ───────────────────────────────────── */}
+      <section className="py-16 max-w-7xl mx-auto overflow-hidden">
+        <motion.div
+          {...fadeUp(0)}
+          className="flex items-end justify-between px-5 sm:px-8 lg:px-12 mb-8"
+        >
+          <div>
+            <p className="label-caps mb-2" style={{ color: "var(--accent-red)" }}>Karya Komunitas</p>
+            <h2 className="heading-display text-[var(--text-primary)]" style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)", letterSpacing: "-0.04em" }}>
+              Dibikin Sama<br className="sm:hidden" /> Lo Semua. 🔥
+            </h2>
+          </div>
+          <p className="text-xs text-[var(--text-faint)] hidden sm:block text-right leading-relaxed">
+            Hover video untuk preview<br />Tap audio untuk dengerin
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+        >
+          <ShowcaseCarousel />
+        </motion.div>
+      </section>
+
+      <div className="section-rule mx-5 sm:mx-8 lg:mx-12" />
+
       {/* ── How it works ───────────────────────────────────────── */}
       <section className="px-5 sm:px-8 lg:px-12 py-20 max-w-7xl mx-auto">
         <motion.div {...fadeUp(0)} className="mb-12">
@@ -270,51 +307,133 @@ export default function LandingPage({ onStart }: LandingPageProps) {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* Featured: Musik LIVE */}
-          <motion.div {...fadeUp(0.05)} className="card-glass-red overflow-hidden md:col-span-1" style={{ padding: 0 }}>
-            <div className="flex items-end gap-px h-14 px-6 pt-4">
-              {Array.from({ length: 40 }, (_, i) => (
+
+          {/* ── Card 1: Musik LIVE ── */}
+          <motion.div {...fadeUp(0.05)} className="relative overflow-hidden rounded-2xl flex flex-col" style={{ padding: 0, background: "linear-gradient(160deg, rgba(255,45,85,0.13) 0%, rgba(220,38,38,0.06) 100%)", border: "1px solid rgba(255,45,85,0.25)" }}>
+            {/* Animated waveform header */}
+            <div className="flex items-end gap-px h-16 px-6 pt-5">
+              {Array.from({ length: 44 }, (_, i) => (
                 <div key={i} className="flex-1 rounded-full waveform-bar"
                   style={{
-                    height: `${25 + Math.sin(i * 0.6) * 18 + Math.cos(i * 0.3) * 10}%`,
-                    background: `rgba(255,45,85,${0.3 + Math.sin(i * 0.4) * 0.15})`,
-                    animationDelay: `${i * 0.05}s`,
+                    height: `${28 + Math.sin(i * 0.6) * 20 + Math.cos(i * 0.3) * 10}%`,
+                    background: `rgba(255,45,85,${0.25 + Math.sin(i * 0.4) * 0.2})`,
+                    animationDelay: `${i * 0.045}s`,
                   }}
                 />
               ))}
             </div>
-            <div className="px-6 pb-6 pt-4 flex gap-4 items-start">
-              <div className="w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center text-3xl" style={{ background: "rgba(255,45,85,0.12)" }}>🎵</div>
+            <div className="px-6 pb-7 pt-5 flex gap-4 items-start flex-1">
+              <div className="w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-glow" style={{ background: "linear-gradient(135deg, #ff2d55, #dc2626)", boxShadow: "0 0 24px rgba(255,45,85,0.5)" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                  <path d="M9 18V5l12-2v13M6 21a3 3 0 100-6 3 3 0 000 6zm12-2a3 3 0 100-6 3 3 0 000 6z"/>
+                </svg>
+              </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2.5">
                   <h3 className="heading-section text-xl text-[var(--text-primary)]">Musik</h3>
-                  <span className="label-caps px-2 py-0.5 rounded-full text-white bg-gradient-red shadow-glow text-[9px]">LIVE</span>
+                  <span className="label-caps px-2 py-0.5 rounded-full text-white text-[9px] glow-pulse" style={{ background: "linear-gradient(90deg, #ff2d55, #dc2626)" }}>LIVE</span>
                 </div>
-                <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-4">
+                <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-5">
                   Tulis vibenya, AI yang bikin lagunya. Dari pop sampe gamelan modern — semua bisa. Gas langsung.
                 </p>
-                <button onClick={onStart} className="btn-primary text-sm py-2.5 px-5 rounded-xl">
+                <button onClick={onStart} className="btn-primary text-sm py-2.5 px-5 rounded-xl w-full sm:w-auto">
                   Coba Sekarang — Gratis →
                 </button>
               </div>
             </div>
           </motion.div>
 
-          {[
-            { icon: "📖", title: "Musik Novel", desc: "Musikmu jadi storyboard visual gokil. Setiap beat punya cerita visualnya sendiri.", card: "card-glass-amber", dotColor: "var(--accent-amber)" },
-            { icon: "🎬", title: "Musik Video", desc: "Dari audio ke video sinematik AI. Nonton hasilnya bikin melongo.", card: "card-glass-coral", dotColor: "var(--accent-coral)" },
-          ].map((feat, i) => (
-            <motion.div key={feat.title} {...fadeUp(0.12 + i * 0.1)} className={`${feat.card} p-6 flex flex-col gap-4`}>
-              <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center text-2xl" style={{ background: `${feat.dotColor}14` }}>{feat.icon}</div>
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="font-semibold text-[var(--text-primary)]">{feat.title}</h3>
-                  <span className="label-caps px-2 py-0.5 rounded-full bg-[var(--bg-elevated)] text-[var(--text-faint)] text-[8px]">SEGERA HADIR</span>
+          {/* ── Card 2: Musik Novel — NOW LIVE ── */}
+          <motion.div {...fadeUp(0.14)} className="relative overflow-hidden rounded-2xl flex flex-col" style={{ background: "linear-gradient(160deg, rgba(245,158,11,0.14) 0%, rgba(217,119,6,0.06) 100%)", border: "1px solid rgba(245,158,11,0.3)" }}>
+            {/* Storyboard mini frames decoration */}
+            <div className="px-6 pt-5 pb-2 flex gap-2">
+              {[
+                { from: "rgba(245,158,11,0.3)", to: "rgba(217,119,6,0.15)" },
+                { from: "rgba(245,158,11,0.5)", to: "rgba(217,119,6,0.25)" },
+                { from: "rgba(245,158,11,0.3)", to: "rgba(217,119,6,0.15)" },
+              ].map((g, i) => (
+                <div key={i} className="flex-1 rounded-lg overflow-hidden relative" style={{ height: 52, background: `linear-gradient(135deg, ${g.from}, ${g.to})`, border: "1px solid rgba(245,158,11,0.2)" }}>
+                  {/* Film holes top */}
+                  <div className="absolute top-1 left-0 right-0 flex justify-around px-1">
+                    {[0,1].map(j => <div key={j} className="w-1.5 h-1.5 rounded-sm bg-black/40" />)}
+                  </div>
+                  {/* Scene icon */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {i === 1
+                      ? <div className="w-4 h-4 rounded-full border-2 border-amber-400/70 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-amber-400/80" /></div>
+                      : <div className="w-5 h-3 rounded-sm opacity-40" style={{ background: "rgba(245,158,11,0.6)" }} />
+                    }
+                  </div>
+                  {/* Film holes bottom */}
+                  <div className="absolute bottom-1 left-0 right-0 flex justify-around px-1">
+                    {[0,1].map(j => <div key={j} className="w-1.5 h-1.5 rounded-sm bg-black/40" />)}
+                  </div>
                 </div>
-                <p className="text-sm text-[var(--text-muted)] leading-relaxed">{feat.desc}</p>
+              ))}
+            </div>
+
+            <div className="px-6 pb-7 pt-3 flex-1 flex flex-col">
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.2)" }}>📖</div>
+                <h3 className="heading-section text-xl text-[var(--text-primary)]">Musik Novel</h3>
+                <span className="label-caps px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: "rgba(245,158,11,0.2)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.4)" }}>LIVE ✦</span>
               </div>
-            </motion.div>
-          ))}
+              <p className="text-sm text-[var(--text-muted)] leading-relaxed flex-1">
+                Musikmu jadi storyboard visual yang gokil. Setiap beat punya cerita dan gambar visualnya sendiri.
+              </p>
+              <button
+                onClick={onStart}
+                className="mt-5 text-sm py-2.5 px-5 rounded-xl w-full font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.35)" }}
+              >
+                Coba Musik Novel →
+              </button>
+            </div>
+          </motion.div>
+
+          {/* ── Card 3: Musik Video — Coming Soon ── */}
+          <motion.div {...fadeUp(0.22)} className="relative overflow-hidden rounded-2xl flex flex-col" style={{ background: "linear-gradient(160deg, rgba(255,107,107,0.1) 0%, rgba(220,38,38,0.04) 100%)", border: "1px solid rgba(255,107,107,0.2)" }}>
+            {/* Film strip decoration */}
+            <div className="px-6 pt-5 pb-2">
+              <div className="relative w-full h-14 rounded-xl overflow-hidden" style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,107,107,0.15)" }}>
+                {/* Film strip holes */}
+                <div className="absolute inset-y-0 left-0 w-5 flex flex-col justify-around items-center py-1">
+                  {[0,1,2].map(j => <div key={j} className="w-2.5 h-2 rounded-sm bg-black/60" />)}
+                </div>
+                <div className="absolute inset-y-0 right-0 w-5 flex flex-col justify-around items-center py-1">
+                  {[0,1,2].map(j => <div key={j} className="w-2.5 h-2 rounded-sm bg-black/60" />)}
+                </div>
+                {/* Frames */}
+                <div className="absolute inset-y-1 left-6 right-6 flex gap-1">
+                  {[0.3,0.6,0.45,0.7,0.35].map((op, i) => (
+                    <div key={i} className="flex-1 rounded-sm" style={{ background: `rgba(255,107,107,${op * 0.6})` }} />
+                  ))}
+                </div>
+                {/* Play icon overlay */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,107,107,0.25)", border: "1px solid rgba(255,107,107,0.4)" }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="rgba(255,107,107,0.9)"><polygon points="2,1 9,5 2,9"/></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 pb-7 pt-3 flex-1 flex flex-col">
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ background: "rgba(255,107,107,0.12)", border: "1px solid rgba(255,107,107,0.2)" }}>🎬</div>
+                <h3 className="heading-section text-xl text-[var(--text-primary)]">Musik Video</h3>
+                <span className="label-caps px-2 py-0.5 rounded-full text-[8px]" style={{ background: "rgba(255,107,107,0.08)", color: "rgba(255,107,107,0.7)", border: "1px solid rgba(255,107,107,0.18)" }}>SEGERA</span>
+              </div>
+              <p className="text-sm text-[var(--text-muted)] leading-relaxed flex-1">
+                Dari audio ke video sinematik AI penuh efek. Nonton hasilnya bikin melongo.
+              </p>
+              <div className="mt-5 flex items-center gap-2 px-4 py-2.5 rounded-xl" style={{ background: "rgba(255,107,107,0.06)", border: "1px solid rgba(255,107,107,0.14)" }}>
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 glow-pulse" style={{ background: "rgba(255,107,107,0.7)" }} />
+                <span className="text-xs text-[var(--text-faint)]">Dalam pengembangan — segera hadir</span>
+              </div>
+            </div>
+          </motion.div>
+
         </div>
       </section>
 
@@ -442,11 +561,11 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             <span className="text-gradient-fire">Bikin Musik?</span>
           </h2>
           <p className="text-[var(--text-muted)] text-sm leading-relaxed mb-8 max-w-sm mx-auto">
-            Daftar gratis, dapat 100 kredit langsung.<br />
-            Gak perlu kartu kredit. Gak perlu pengalaman musik.
+            Gak perlu studio. Gak perlu pengalaman musik.<br />
+            Cukup tulis vibenya — AI yang bikin lagunya.
           </p>
           <button onClick={onStart} className="btn-primary rounded-2xl py-4 px-12 text-base">
-            Mulai Gratis Sekarang 🚀
+            Mulai Sekarang 🚀
           </button>
           <p className="text-xs text-[var(--text-faint)] mt-4">Daftar via WhatsApp · Langsung bisa pakai</p>
         </motion.div>

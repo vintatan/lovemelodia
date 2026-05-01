@@ -76,6 +76,10 @@
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,45,85,0.7); }
 
+/* ── Carousel scrollbar hide ───────────────────────────────────── */
+.carousel-track::-webkit-scrollbar { display: none; }
+.carousel-track { scrollbar-width: none; -ms-overflow-style: none; }
+
 /* ── Gradients ─────────────────────────────────────────────────── */
 .bg-gradient-red     { background: linear-gradient(135deg, #ff2d55, #dc2626); }
 .bg-gradient-fire    { background: linear-gradient(135deg, #dc2626, #ff2d55, #ff6b6b, #fb923c); }

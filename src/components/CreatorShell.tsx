@@ -2,16 +2,17 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import CreditsBadge from "./CreditsBadge.tsx";
 import CreditsModal from "./CreditsModal.tsx";
+import NewMemberModal from "./NewMemberModal.tsx";
 import MusicCreator from "./music/MusicCreator.tsx";
 import MusicHistory from "./music/MusicHistory.tsx";
 import NovelTab from "./music/NovelTab.tsx";
 
 type Mode = "music" | "history" | "novel" | "video";
 
-const MODES: { id: Mode; icon: string; label: string; soon?: boolean }[] = [
+const MODES: { id: Mode; icon: string; label: string; soon?: boolean; live?: boolean }[] = [
   { id: "music",   icon: "🎵", label: "Musik" },
   { id: "history", icon: "🕓", label: "Riwayat" },
-  { id: "novel",   icon: "📖", label: "Musik Novel" },
+  { id: "novel",   icon: "📖", label: "Musik Novel", live: true },
   { id: "video",   icon: "🎬", label: "Musik Video", soon: true },
 ];
 
@@ -25,6 +26,13 @@ interface CreatorShellProps {
 export default function CreatorShell({ token, phone, credits, onCreditsUpdate }: CreatorShellProps) {
   const [mode, setMode] = useState<Mode>("music");
   const [creditsModalOpen, setCreditsModalOpen] = useState(false);
+  const [newMemberOpen, setNewMemberOpen] = useState(() => {
+    if (credits > 0) return false;
+    const shown = sessionStorage.getItem("kreasi_welcome_shown");
+    if (shown) return false;
+    sessionStorage.setItem("kreasi_welcome_shown", "1");
+    return true;
+  });
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -52,7 +60,7 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
             <button
               key={m.id}
               onClick={() => setMode(m.id)}
-              className={`relative flex-shrink-0 flex items-center justify-center gap-1.5 px-3 py-3.5 text-sm font-medium transition-all duration-200 ${
+              className={`relative flex-shrink-0 flex items-center justify-center gap-1.5 min-w-[72px] px-3 py-3.5 text-sm font-medium transition-all duration-200 ${
                 isActive
                   ? "text-[var(--accent-red)]"
                   : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
@@ -60,6 +68,11 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
             >
               <span>{m.icon}</span>
               <span className="whitespace-nowrap">{m.label}</span>
+              {m.live && (
+                <span className="label-caps px-1.5 py-0.5 rounded-full text-[8px] font-bold" style={{ background: "rgba(245,158,11,0.18)", color: "#f59e0b" }}>
+                  LIVE
+                </span>
+              )}
               {m.soon && (
                 <span className="label-caps px-1.5 py-0.5 rounded-full bg-[var(--accent-amber)]/12 text-[var(--accent-amber)] text-[8px]">
                   Soon
@@ -122,6 +135,14 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
         token={token}
         onClose={() => setCreditsModalOpen(false)}
       />
+
+      {newMemberOpen && (
+        <NewMemberModal
+          token={token}
+          onClose={() => setNewMemberOpen(false)}
+          onPurchased={() => setNewMemberOpen(false)}
+        />
+      )}
     </div>
   );
 }

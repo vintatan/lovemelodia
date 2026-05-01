@@ -1,15 +1,15 @@
 import { Router } from "express";
 import { nanoid } from "nanoid";
-import { getOrCreateUserAsync, getCredits, createTransaction, getTransactionByExternalIdAsync, markPaidAndCredit, redeemFreePromo } from "../lib/db.js";
-import { createPaymentLink, getPaymentLinkStatus } from "../lib/airwallex.js";
+import { getOrCreateUserAsync, getCredits, createTransaction, markPaidAndCredit, redeemFreePromo } from "../lib/db.js";
+import { createPaymentRequest } from "../lib/hitpay.js";
 import { trackPaymentCompleted } from "../lib/supabase.js";
 
 const router = Router();
 
 const PACKAGES = [
-  { name: "starter", credits: 200, amountIdr: 25000, amountSgd: 3 },
-  { name: "creator", credits: 500, amountIdr: 55000, amountSgd: 6 },
-  { name: "pro",     credits: 1200, amountIdr: 115000, amountSgd: 12 },
+  { name: "starter", credits: 20,  amountIdr: 10000,  amountSgd: 1 },
+  { name: "creator", credits: 50,  amountIdr: 55000,  amountSgd: 6 },
+  { name: "pro",     credits: 120, amountIdr: 115000, amountSgd: 12 },
 ];
 
 router.get("/balance", async (req, res) => {
@@ -31,15 +31,16 @@ router.post("/purchase", async (req, res) => {
   const externalId = `kreasi-${nanoid()}`;
   const amount = currency === "SGD" ? pkg.amountSgd : pkg.amountIdr;
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const webhookUrl = `${appUrl}/api/webhook/hitpay`;
 
   try {
-    const link = await createPaymentLink({
-      externalId,
+    const payment = await createPaymentRequest({
       amount,
       currency: currency as "IDR" | "SGD",
-      description: `Kreasi AI ${pkg.credits} Credits`,
-      returnUrl: `${appUrl}?payment=success&ext=${externalId}`,
-      cancelUrl: `${appUrl}?payment=cancelled`,
+      purpose: `Kreasi AI ${pkg.credits} Credits`,
+      referenceNumber: externalId,
+      redirectUrl: `${appUrl}?payment=success&ext=${externalId}`,
+      webhookUrl,
     });
 
     createTransaction({
@@ -47,29 +48,11 @@ router.post("/purchase", async (req, res) => {
       credits: pkg.credits, amount, currency,
     });
 
-    return res.json({ paymentUrl: link.invoiceUrl, externalId });
+    return res.json({ paymentUrl: payment.url, externalId });
   } catch (err: any) {
     console.error("[Credits] purchase error:", err);
     return res.status(500).json({ error: "Payment creation failed" });
   }
-});
-
-router.post("/verify-payment", async (req, res) => {
-  const phone = req.user!.phone;
-  const { externalId } = req.body as { externalId?: string };
-  if (!externalId) return res.status(400).json({ error: "externalId required" });
-
-  const tx = await getTransactionByExternalIdAsync(externalId);
-  if (!tx || tx.phone !== phone) return res.status(404).json({ error: "Transaction not found" });
-  if (tx.status === "PAID") return res.json({ status: "PAID", credits: getCredits(phone) });
-
-  const status = await getPaymentLinkStatus(externalId);
-  if (status === "SUCCEEDED") {
-    const granted = markPaidAndCredit(externalId);
-    if (granted) trackPaymentCompleted(tx as any);
-    return res.json({ status: "PAID", credits: getCredits(phone) });
-  }
-  return res.json({ status });
 });
 
 router.post("/redeem-promo", async (req, res) => {

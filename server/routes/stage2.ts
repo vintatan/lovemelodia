@@ -8,7 +8,7 @@ import { bqTrackProject } from "../lib/bigquery.js";
 import { generationRateLimit } from "../middleware/rateLimit.js";
 
 const router = Router();
-const FRAME_CREDITS = 5;
+const FRAME_CREDITS = 0;
 
 async function generateFrame(params: {
   phone: string;
@@ -117,8 +117,9 @@ router.post("/approve", (req, res) => {
   if (!project.frames_json) return res.status(400).json({ error: "No frames generated" });
 
   const frames = JSON.parse(project.frames_json) as Array<{ timepointIndex: number; imageUrl: string } | null>;
-  if (frames.some(f => f === null)) {
-    return res.status(400).json({ error: "Not all frames generated" });
+  const validFrames = frames.filter(f => f !== null);
+  if (validFrames.length < 3) {
+    return res.status(400).json({ error: "Need at least 3 frames generated" });
   }
 
   saveStage2Frame(projectId, project.frames_json, 0, true);

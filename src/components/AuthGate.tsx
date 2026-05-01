@@ -151,9 +151,7 @@ export default function AuthGate({ onAuth, onBack }: AuthGateProps) {
           Masuk &amp;<br />Mulai Bikin
         </h1>
         <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-          Login via WhatsApp · Dapat{" "}
-          <span className="font-bold" style={{ color: "var(--accent-green)" }}>100 kredit gratis</span>
-          {" "}langsung
+          Login via WhatsApp · Langsung bisa bikin musik AI
         </p>
       </motion.div>
 

@@ -8,7 +8,7 @@ import { bqTrackProject } from "../lib/bigquery.js";
 import { generationRateLimit } from "../middleware/rateLimit.js";
 
 const router = Router();
-const STAGE1_CREDITS = 5;
+const STAGE1_CREDITS = 0;
 
 router.post("/enhance", generationRateLimit, async (req, res) => {
   const phone = req.user!.phone;
