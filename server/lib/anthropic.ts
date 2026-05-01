@@ -336,6 +336,54 @@ Read the lyrics to determine the narrator's gender, then generate the character 
   return (msg.content[0] as { text: string }).text.trim();
 }
 
+export interface AlbumSongConcept {
+  title: string;
+  genre: string;
+  description: string;
+}
+
+export async function generateAlbumSongConcepts(theme: string, count: number): Promise<{
+  concepts: AlbumSongConcept[];
+  coverPrompt: string;
+  inputTokens: number;
+  outputTokens: number;
+}> {
+  const msg = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1536,
+    system: `Kamu adalah music director yang kreatif. Buat ${count} konsep lagu yang unik dan berbeda untuk sebuah album bertema, PLUS satu image prompt untuk sampul albumnya.
+Respons HANYA berupa JSON valid (tanpa markdown):
+{
+  "coverPrompt": "50-80 kata dalam Bahasa Inggris — deskripsi visual sinematik untuk sampul album. Harus: abstrak atau simbolik (bukan wajah manusia), evocative dari mood tema, kaya warna dan tekstur, gaya art direction yang kuat (bisa surrealis, dreamlike, painterly, atau fotorealistik). JANGAN sebut teks, huruf, atau tipografi.",
+  "songs": [
+    {
+      "title": "Judul lagu dalam Bahasa Indonesia — puitis, max 5 kata",
+      "genre": "satu genre: Pop | Electronic | Jazz | Tradisional | Rock | Cinematic | R&B | Lo-fi",
+      "description": "2-3 kalimat Bahasa Indonesia: sudut pandang spesifik dari tema, mood, dan cerita yang akan diangkat lagu ini"
+    }
+  ]
+}
+Pastikan setiap lagu berbeda genre/mood, dan bersama-sama membentuk album yang koheren dengan tema.`,
+    messages: [{
+      role: "user",
+      content: `Tema album: ${theme}\nBuat ${count} konsep lagu yang beragam dan satu cover prompt untuk album ini.`,
+    }],
+  });
+
+  const rawText = (msg.content[0] as { text: string }).text.trim();
+  const parsed = parseClaudeJson<{ coverPrompt?: string; songs?: AlbumSongConcept[] }>(rawText, "generateAlbumSongConcepts returned non-JSON");
+
+  const songs = Array.isArray(parsed.songs) ? parsed.songs : (Array.isArray(parsed) ? parsed as unknown as AlbumSongConcept[] : []);
+  if (songs.length === 0) throw new Error("Claude returned no song concepts");
+
+  return {
+    concepts: songs.slice(0, count),
+    coverPrompt: parsed.coverPrompt ?? `${theme}, abstract artistic album cover, cinematic mood, rich colors, evocative and symbolic visual`,
+    inputTokens: msg.usage.input_tokens,
+    outputTokens: msg.usage.output_tokens,
+  };
+}
+
 export async function generateStoryboardImagePrompts(params: {
   songTitle: string | null;
   songDescription: string;

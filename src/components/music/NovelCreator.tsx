@@ -1,6 +1,23 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { apiFetch } from "../../lib/api.ts";
+import { RotatingText } from "../UI.tsx";
+
+const NOVEL_LOADING_MSGS = [
+  "Bikin gambar per scene dulu... 🖼️",
+  "Lagi sinkronin visual sama musiknya...",
+  "Render frame demi frame nih...",
+  "Hampir jadi videonya! 🎬",
+  "Ngerakit timelapse dari semua scene...",
+  "Upload ke server, sebentar lagi...",
+];
+
+const ASSEMBLE_LOADING_MSGS = [
+  "Ngerakit video dari semua scene... 🎬",
+  "Sinkronisasi audio dan visual...",
+  "Rendering final video nih...",
+  "Upload ke server, hampir selesai...",
+];
 
 interface NovelCreatorProps {
   musicJobId: string;
@@ -321,7 +338,10 @@ export default function NovelCreator({ musicJobId, token, credits, onCreditsUpda
             )}
 
             <p className="text-xs text-[var(--text-faint)] text-center">
-              {phase === "assembling" ? "Sinkronisasi video dengan musik... ~1–2 menit 🎬" : "Membuat gambar... ~3–5 menit 🖼️"}
+              <RotatingText
+                messages={phase === "assembling" ? ASSEMBLE_LOADING_MSGS : NOVEL_LOADING_MSGS}
+                interval={3500}
+              />
             </p>
           </motion.div>
         )}

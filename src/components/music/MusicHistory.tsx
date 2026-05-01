@@ -9,6 +9,13 @@ interface NovelSummary {
   novelJobId: string | null;
 }
 
+interface AlbumRef {
+  albumId: string;
+  albumTheme: string;
+  albumTitle?: string | null;
+  albumCoverUrl?: string | null;
+}
+
 interface MusicJob {
   id: string;
   title: string | null;
@@ -19,6 +26,7 @@ interface MusicJob {
   credits_used: number;
   created_at: number;
   novel: NovelSummary | null;
+  album: AlbumRef | null;
 }
 
 function MiniPlayer({ audioUrl }: { audioUrl: string }) {
@@ -188,8 +196,8 @@ function InlineRename({ jobId, initialTitle, prompt, token, onSaved }: {
       onClick={() => { setDraft(initialTitle ?? ""); setEditing(true); }}
       className="group flex items-center gap-1.5 text-left w-full"
     >
-      <p className="text-sm font-medium text-[var(--text-primary)] leading-snug line-clamp-2 flex-1">
-        {initialTitle || prompt || "Musik tanpa judul"}
+      <p className="text-sm font-medium text-[var(--text-primary)] leading-snug flex-1">
+        {initialTitle || "Musik tanpa judul"}
       </p>
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent-red)" strokeWidth="2.5" className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
         <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
@@ -257,7 +265,7 @@ function JobCard({ job: initialJob, token }: { job: MusicJob; token: string }) {
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="card-elevated p-4 space-y-2 rounded-2xl"
+      className="card-elevated p-4 space-y-2.5 rounded-2xl"
     >
       <div className="flex items-start justify-between gap-3">
         <InlineRename
@@ -270,8 +278,28 @@ function JobCard({ job: initialJob, token }: { job: MusicJob; token: string }) {
         <StatusBadge status={job.status} />
       </div>
 
-      {job.title && (
-        <p className="text-[11px] text-[var(--text-faint)] line-clamp-1">{job.prompt}</p>
+      {/* Album badge */}
+      {job.album && (
+        <div className="flex items-center gap-2">
+          {job.album.albumCoverUrl && (
+            <img
+              src={job.album.albumCoverUrl}
+              alt="Album cover"
+              className="w-7 h-7 rounded-md object-cover flex-shrink-0"
+            />
+          )}
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold truncate max-w-[200px]"
+            style={{ background: "rgba(255,159,10,0.12)", color: "var(--accent-amber)" }}
+          >
+            💿 {job.album.albumTitle || job.album.albumTheme}
+          </span>
+        </div>
+      )}
+
+      {/* Full prompt / description — never truncated */}
+      {job.prompt && (
+        <p className="text-xs text-[var(--text-muted)] leading-relaxed">{job.prompt}</p>
       )}
 
       <div className="flex items-center gap-2 flex-wrap">

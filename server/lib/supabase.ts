@@ -158,6 +158,78 @@ export async function updateNovelJobInSupabase(
   }
 }
 
+// ── Albums ────────────────────────────────────────────────────────────────────
+
+export async function createAlbumInSupabase(album: {
+  id: string; phone: string; title?: string | null; theme: string;
+  songCount: number; creditsCharged: number;
+}): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from("albums").upsert(
+      {
+        id: album.id,
+        phone: album.phone,
+        title: album.title ?? null,
+        theme: album.theme,
+        song_count: album.songCount,
+        credits_charged: album.creditsCharged,
+        status: "generating",
+        music_job_ids: [],
+        cover_url: null,
+        created_at: new Date().toISOString(),
+      },
+      { onConflict: "id", ignoreDuplicates: true }
+    );
+  } catch (err) {
+    console.error("[Supabase] createAlbum error:", err);
+  }
+}
+
+export async function updateAlbumInSupabase(
+  id: string,
+  updates: {
+    status?: string;
+    musicJobIds?: string[];
+    coverUrl?: string | null;
+    title?: string | null;
+  }
+): Promise<void> {
+  if (!supabase) return;
+  try {
+    const payload: Record<string, unknown> = {};
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.musicJobIds !== undefined) payload.music_job_ids = updates.musicJobIds;
+    if (updates.coverUrl !== undefined) payload.cover_url = updates.coverUrl;
+    if (updates.title !== undefined) payload.title = updates.title;
+    if (Object.keys(payload).length === 0) return;
+    await supabase.from("albums").update(payload).eq("id", id);
+  } catch (err) {
+    console.error("[Supabase] updateAlbum error:", err);
+  }
+}
+
+export async function getAlbumsByPhoneFromSupabase(phone: string): Promise<Array<{
+  id: string; phone: string; title: string | null; theme: string;
+  song_count: number; credits_charged: number; status: string;
+  music_job_ids: unknown; cover_url: string | null; created_at: string;
+}> | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from("albums")
+      .select("id, phone, title, theme, song_count, credits_charged, status, music_job_ids, cover_url, created_at")
+      .eq("phone", phone)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) throw error;
+    return (data as any[]) ?? null;
+  } catch (err) {
+    console.error("[Supabase] getAlbumsByPhone error:", err);
+    return null;
+  }
+}
+
 export function trackPaymentCompleted(tx: {
   external_id?: string; phone: string; package_name: string;
   credits: number; amount: number; currency: string;

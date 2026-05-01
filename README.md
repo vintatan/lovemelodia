@@ -93,6 +93,43 @@ kreasi-app/
 | Stage 2 per frame | 5 × N frames |
 | Stage 3 assembly | 30 |
 
+## MCP Integration
+
+Kreasi AI music generation is accessible directly from Claude Code via the [Imaji MCP](https://github.com/vintatan/imaji-mcp) server.
+
+### Available MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `kreasi_login` | Send WhatsApp OTP to authenticate |
+| `kreasi_verify_login` | Verify OTP — stores session for 30 days |
+| `kreasi_create_music` | Generate music (polls until done, returns audio URL + lyrics + timepoints) |
+| `kreasi_music_status` | Check status of a long-running job by ID |
+
+### Quick Start
+
+```bash
+# In Claude Code, run:
+/create-music lagu tentang rindu hujan malam, indie melancholic
+```
+
+Claude will guide you through WhatsApp login on first use.
+
+### API Change: Expanded Status Response
+
+`GET /api/music/status/:jobId` now returns the full job details when completed:
+
+```json
+{
+  "status": "completed",
+  "audioUrl": "https://...",
+  "title": "Malam di Jakarta",
+  "enhancedPrompt": "Indie Indonesian acoustic ballad...",
+  "lyrics": "Verse 1:\n...",
+  "timepoints": [{ "timestamp": "0:00", "label": "Intro", "mood": "melancholic" }, ...]
+}
+```
+
 ## Key Design Decisions
 
 - **Dramatic sync**: Claude maps timepoints to lyrical moments; FFmpeg uses per-timepoint `transitionDuration` (0.3–1.2s) and intensity-driven Ken Burns zoom speed

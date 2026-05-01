@@ -43,6 +43,20 @@ async function wavespeedPost(endpoint: string, body: Record<string, unknown>, ap
   throw new Error("Generation timed out");
 }
 
+export async function generateAlbumCover(prompt: string): Promise<string> {
+  const apiKey = process.env.WAVESPEED_API_KEY;
+  if (!apiKey) throw new Error("WAVESPEED_API_KEY not set");
+
+  return wavespeedPost(T2I_ENDPOINT, {
+    prompt: `${prompt}, album cover art, square format, highly detailed, cinematic, artistic, vibrant colors, professional music artwork, no text, no words, no letters, no typography`,
+    negative_prompt: "nsfw, nudity, nude, sexual, explicit, violence, blood, gore, weapons, disturbing, horror, ugly, deformed, watermark, text, letters, words, typography, captions, subtitles, labels, numbers, writing, inscription, font, logo, signature, title",
+    size: "1024*1024",
+    enable_sync_mode: true,
+    num_inference_steps: 35,
+    guidance_scale: 4.5,
+  }, apiKey);
+}
+
 export async function generateCharacterPortrait(characterPrompt: string): Promise<string> {
   const apiKey = process.env.WAVESPEED_API_KEY;
   if (!apiKey) throw new Error("WAVESPEED_API_KEY not set");

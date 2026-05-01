@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import { nanoid } from "nanoid";
-import { supabase, getCreditsFromSupabase, syncCreditsToSupabase, createTransactionInSupabase, getTransactionFromSupabase, hasRedeemedPromoInSupabase, recordPromoRedemptionInSupabase } from "./supabase.js";
+import { supabase, getCreditsFromSupabase, syncCreditsToSupabase, createTransactionInSupabase, getTransactionFromSupabase, hasRedeemedPromoInSupabase, recordPromoRedemptionInSupabase, getAlbumsByPhoneFromSupabase } from "./supabase.js";
 import { bqTrackCost, bqTrackUserCredit } from "./bigquery.js";
 
 fs.mkdirSync(path.resolve("./data"), { recursive: true });
@@ -128,6 +128,24 @@ db.exec(`
 `);
 
 // ── Migrations ────────────────────────────────────────────────────────────────
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS albums (
+    id               TEXT PRIMARY KEY,
+    phone            TEXT NOT NULL,
+    title            TEXT,
+    theme            TEXT NOT NULL,
+    song_count       INTEGER NOT NULL,
+    credits_charged  INTEGER NOT NULL,
+    status           TEXT NOT NULL DEFAULT 'generating',
+    music_job_ids    TEXT NOT NULL DEFAULT '[]',
+    cover_url        TEXT,
+    created_at       INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_albums_phone ON albums(phone)");
+} catch { /* already exists */ }
+try { db.exec("ALTER TABLE albums ADD COLUMN cover_url TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE albums ADD COLUMN title TEXT"); } catch { /* already exists */ }
+
 try { db.exec("ALTER TABLE music_jobs ADD COLUMN enhanced_prompt TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE music_jobs ADD COLUMN timepoints_json TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE novel_jobs ADD COLUMN timepoints_json TEXT"); } catch { /* already exists */ }
@@ -170,6 +188,23 @@ const stmts = {
   updateMusicJob:        db.prepare("UPDATE music_jobs SET status = ?, audio_url = ?, error = ?, enhanced_prompt = COALESCE(?, enhanced_prompt), timepoints_json = COALESCE(?, timepoints_json), lyrics = COALESCE(?, lyrics) WHERE id = ?"),
   renameMusicJob:        db.prepare("UPDATE music_jobs SET title = ? WHERE id = ? AND phone = ?"),
   getMusicJobsByPhone:   db.prepare("SELECT id, title, prompt, enhanced_prompt, timepoints_json, lyrics, status, audio_url, error, credits_used, created_at FROM music_jobs WHERE phone = ? ORDER BY created_at DESC LIMIT 50"),
+
+  insertAlbum:           db.prepare("INSERT INTO albums (id, phone, title, theme, song_count, credits_charged, music_job_ids) VALUES (?, ?, ?, ?, ?, ?, ?)"),
+  upsertAlbum:           db.prepare(`INSERT INTO albums (id, phone, title, theme, song_count, credits_charged, status, music_job_ids, cover_url, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           ON CONFLICT(id) DO UPDATE SET
+                             title = excluded.title,
+                             status = excluded.status,
+                             music_job_ids = excluded.music_job_ids,
+                             cover_url = excluded.cover_url`),
+  getAlbum:              db.prepare("SELECT * FROM albums WHERE id = ?"),
+  updateAlbumStatus:     db.prepare("UPDATE albums SET status = ? WHERE id = ?"),
+  updateAlbumJobIds:     db.prepare("UPDATE albums SET music_job_ids = ? WHERE id = ?"),
+  updateAlbumCoverUrl:   db.prepare("UPDATE albums SET cover_url = ? WHERE id = ?"),
+  renameAlbum:           db.prepare("UPDATE albums SET title = ? WHERE id = ? AND phone = ?"),
+  getAlbumsByPhone:      db.prepare("SELECT * FROM albums WHERE phone = ? ORDER BY created_at DESC LIMIT 30"),
+  getAlbumsForJobLookup: db.prepare("SELECT id, theme FROM albums WHERE phone = ?"),
+  getStaleAlbums:        db.prepare("SELECT * FROM albums WHERE status = 'generating' AND created_at < ?"),
 
   insertNovelJob:        db.prepare("INSERT INTO novel_jobs (id, music_job_id, phone) VALUES (?, ?, ?)"),
   getNovelJob:           db.prepare("SELECT * FROM novel_jobs WHERE id = ?"),
@@ -633,6 +668,96 @@ export function getShowcaseItems(): ShowcaseItem[] {
     if (audio[i]) result.push(audio[i]);
   }
   return result.slice(0, 12);
+}
+
+// ── Albums ────────────────────────────────────────────────────────────────────
+
+export interface Album {
+  id: string; phone: string; title: string | null; theme: string;
+  song_count: number; credits_charged: number;
+  status: string; music_job_ids: string; cover_url: string | null; created_at: number;
+}
+
+export function createAlbum(data: {
+  id: string; phone: string; title?: string; theme: string;
+  songCount: number; creditsCharged: number; musicJobIds: string[];
+}): void {
+  stmts.insertAlbum.run(data.id, data.phone, data.title ?? null, data.theme, data.songCount, data.creditsCharged, JSON.stringify(data.musicJobIds));
+}
+
+export function getAlbum(id: string): Album | undefined {
+  return stmts.getAlbum.get(id) as Album | undefined;
+}
+
+export function updateAlbumStatus(id: string, status: string): void {
+  stmts.updateAlbumStatus.run(status, id);
+}
+
+export function updateAlbumJobIds(id: string, musicJobIds: string[]): void {
+  stmts.updateAlbumJobIds.run(JSON.stringify(musicJobIds), id);
+}
+
+export function updateAlbumCoverUrl(id: string, coverUrl: string): void {
+  stmts.updateAlbumCoverUrl.run(coverUrl, id);
+}
+
+export function renameAlbum(id: string, phone: string, title: string): boolean {
+  return stmts.renameAlbum.run(title, id, phone).changes > 0;
+}
+
+export function getAlbumsByPhone(phone: string): Album[] {
+  return stmts.getAlbumsByPhone.all(phone) as Album[];
+}
+
+export async function getAlbumsByPhoneAsync(phone: string): Promise<Album[]> {
+  const local = stmts.getAlbumsByPhone.all(phone) as Album[];
+  if (local.length > 0) return local;
+
+  // Local cache is empty — try Supabase
+  const remote = await getAlbumsByPhoneFromSupabase(phone);
+  if (!remote || remote.length === 0) return [];
+
+  // Hydrate local SQLite
+  const upsert = db.transaction(() => {
+    for (const a of remote) {
+      const jobIds = Array.isArray(a.music_job_ids)
+        ? JSON.stringify(a.music_job_ids)
+        : (typeof a.music_job_ids === "string" ? a.music_job_ids : "[]");
+      const createdAtUnix = a.created_at
+        ? Math.floor(new Date(a.created_at).getTime() / 1000)
+        : Math.floor(Date.now() / 1000);
+      try {
+        stmts.upsertAlbum.run(
+          a.id, a.phone, a.title ?? null, a.theme,
+          a.song_count, a.credits_charged, a.status,
+          jobIds, a.cover_url ?? null, createdAtUnix,
+        );
+      } catch (e) {
+        console.error("[db] upsertAlbum from Supabase failed:", e);
+      }
+    }
+  });
+  upsert();
+
+  return stmts.getAlbumsByPhone.all(phone) as Album[];
+}
+
+export function getStaleAlbums(olderThanUnix: number): Album[] {
+  return stmts.getStaleAlbums.all(olderThanUnix) as Album[];
+}
+
+export function getAlbumMapForPhone(phone: string): Record<string, { albumId: string; albumTheme: string; albumTitle: string | null; albumCoverUrl: string | null }> {
+  const albums = stmts.getAlbumsByPhone.all(phone) as Album[];
+  const map: Record<string, { albumId: string; albumTheme: string; albumTitle: string | null; albumCoverUrl: string | null }> = {};
+  for (const album of albums) {
+    try {
+      const jobIds: string[] = JSON.parse(album.music_job_ids);
+      for (const jobId of jobIds) {
+        map[jobId] = { albumId: album.id, albumTheme: album.theme, albumTitle: album.title, albumCoverUrl: album.cover_url };
+      }
+    } catch { /* skip malformed */ }
+  }
+  return map;
 }
 
 export default db;
