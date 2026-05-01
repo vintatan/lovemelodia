@@ -20,7 +20,7 @@ router.post("/send-otp", otpRateLimit, async (req, res) => {
       return res.status(400).json({ error: "Invalid phone number" });
     }
     const otp = generateOtp();
-    storeOtp(normalized, otp);
+    await storeOtp(normalized, otp);
     if (IS_DEV) console.log(`\n[Auth] DEV OTP for ${normalized}: ${otp}\n`);
 
     const message =
@@ -45,7 +45,7 @@ router.post("/verify-otp", otpRateLimit, async (req, res) => {
     return res.status(400).json({ error: "Phone and OTP required" });
   }
   const normalized = normalizePhone(phone);
-  const valid = verifyOtp(normalized, otp);
+  const valid = await verifyOtp(normalized, otp);
   if (!valid) {
     return res.status(401).json({ error: "Invalid or expired OTP" });
   }
