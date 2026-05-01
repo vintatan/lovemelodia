@@ -3,6 +3,17 @@ import { motion, AnimatePresence } from "motion/react";
 import { apiFetch } from "../../lib/api.ts";
 import ShareButtons from "./ShareButtons.tsx";
 import NovelCreator from "./NovelCreator.tsx";
+import { RotatingText } from "../UI.tsx";
+
+const MUSIC_LOADING_MSGS = [
+  "AI lagi garap musikmu... 🎵",
+  "Lagi milih chord yang pas buat kamu...",
+  "Nulis liriknya dulu ya, sabar...",
+  "Atur tempo dan beat-nya sekarang...",
+  "Hampir jadi, tinggal mixing! 🎧",
+  "Sedang poles vokal dan instrumennya...",
+  "Bentar lagi selesai, dijamin enak didengernya!",
+];
 
 const GENRES = ["Pop", "Electronic", "Jazz", "Tradisional", "Rock", "Cinematic", "R&B", "Lo-fi"];
 
@@ -544,7 +555,9 @@ export default function MusicCreator({ token, credits, onCreditsUpdate, onTopUp 
             </div>
 
             <div className="space-y-2">
-              <p className="font-bold text-[var(--text-primary)] text-base">AI lagi garap musikmu...</p>
+              <p className="font-bold text-[var(--text-primary)] text-base">
+                <RotatingText messages={MUSIC_LOADING_MSGS} interval={3500} />
+              </p>
               <p className="text-sm text-[var(--text-muted)]">Biasanya butuh 2–3 menit. Tenang aja ya 🎧</p>
             </div>
 

@@ -1,5 +1,7 @@
 import { type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useRotatingText } from "../hooks/useRotatingText.ts";
 
 // ── Button ─────────────────────────────────────────────────────────────────────
 
@@ -107,6 +109,26 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
         className={`w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-faint)] focus:outline-none focus:border-[var(--accent-violet)] transition-colors resize-none ${className}`}
       />
     </label>
+  );
+}
+
+// ── RotatingText ───────────────────────────────────────────────────────────────
+
+export function RotatingText({ messages, interval = 3500, className = "" }: { messages: string[]; interval?: number; className?: string }) {
+  const text = useRotatingText(messages, interval);
+  return (
+    <AnimatePresence mode="wait">
+      <motion.span
+        key={text}
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -5 }}
+        transition={{ duration: 0.35 }}
+        className={className}
+      >
+        {text}
+      </motion.span>
+    </AnimatePresence>
   );
 }
 

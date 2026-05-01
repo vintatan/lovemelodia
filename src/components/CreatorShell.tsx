@@ -6,13 +6,15 @@ import NewMemberModal from "./NewMemberModal.tsx";
 import MusicCreator from "./music/MusicCreator.tsx";
 import MusicHistory from "./music/MusicHistory.tsx";
 import NovelTab from "./music/NovelTab.tsx";
+import AlbumCreator from "./music/AlbumCreator.tsx";
 
-type Mode = "music" | "history" | "novel" | "video";
+type Mode = "music" | "history" | "novel" | "album" | "video";
 
 const MODES: { id: Mode; icon: string; label: string; soon?: boolean; live?: boolean }[] = [
   { id: "music",   icon: "🎵", label: "Musik" },
   { id: "history", icon: "🕓", label: "Riwayat" },
   { id: "novel",   icon: "📖", label: "Musik Novel", live: true },
+  { id: "album",   icon: "💿", label: "Album", live: true },
   { id: "video",   icon: "🎬", label: "Musik Video", soon: true },
 ];
 
@@ -106,6 +108,17 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
           {mode === "novel" && (
             <motion.div key="novel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22 }}>
               <NovelTab
+                token={token}
+                credits={credits}
+                onCreditsUpdate={onCreditsUpdate}
+                onTopUp={() => setCreditsModalOpen(true)}
+              />
+            </motion.div>
+          )}
+
+          {mode === "album" && (
+            <motion.div key="album" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22 }}>
+              <AlbumCreator
                 token={token}
                 credits={credits}
                 onCreditsUpdate={onCreditsUpdate}

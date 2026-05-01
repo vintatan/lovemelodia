@@ -13,9 +13,11 @@ import stage2Router from "./routes/stage2.js";
 import stage3Router from "./routes/stage3.js";
 import musicRouter from "./routes/music.js";
 import novelRouter, { novelVideoProxy } from "./routes/novel.js";
+import albumRouter from "./routes/album.js";
 import publicRouter from "./routes/public.js";
 import { requireAuth } from "./middleware/auth.js";
-import { getStaleAssemblyJobs, addCreditsAsync } from "./lib/db.js";
+import { getStaleAssemblyJobs, getStaleAlbums, updateAlbumStatus, addCreditsAsync } from "./lib/db.js";
+import { updateAlbumInSupabase } from "./lib/supabase.js";
 import { ensureBucketPublicAccess } from "./lib/gcs.js";
 
 declare global {
@@ -69,6 +71,7 @@ app.use("/api/stage1", requireAuth, stage1Router);
 app.use("/api/stage2", requireAuth, stage2Router);
 app.use("/api/stage3", requireAuth, stage3Router);
 app.use("/api/music", requireAuth, musicRouter);
+app.use("/api/album", requireAuth, albumRouter);
 app.get("/api/novel/video/:jobId", novelVideoProxy);
 app.use("/api/novel", requireAuth, novelRouter);
 
@@ -103,4 +106,18 @@ async function reconcileStaleJobs(): Promise<void> {
 }
 
 reconcileStaleJobs().catch(err => console.error("[Reconcile] startup error:", err));
+
+// Reconcile stale albums — mark failed and refund package credits for albums stuck >20 min
+async function reconcileStaleAlbums(): Promise<void> {
+  const cutoff = Math.floor(Date.now() / 1000) - 20 * 60;
+  const stale = getStaleAlbums(cutoff);
+  for (const album of stale) {
+    console.log(`[Reconcile] Refunding stale album ${album.id} (${album.credits_charged} credits) for ${album.phone}`);
+    updateAlbumStatus(album.id, "failed");
+    void updateAlbumInSupabase(album.id, { status: "failed" });
+    await addCreditsAsync(album.phone, album.credits_charged, "refund").catch(() => {});
+  }
+}
+
+reconcileStaleAlbums().catch(err => console.error("[Reconcile] album startup error:", err));
 ensureBucketPublicAccess().catch(err => console.error("[GCS] startup error:", err));
