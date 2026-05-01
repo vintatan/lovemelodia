@@ -3,6 +3,15 @@ import { motion, AnimatePresence } from "motion/react";
 import { apiFetch } from "../../lib/api.ts";
 import { RotatingText } from "../UI.tsx";
 
+const ALBUM_NOVEL_LOADING_MSGS = [
+  "Bikin storyboard tiap lagu...",
+  "Generate karakter & visual... 🎨",
+  "Assembling video per lagu...",
+  "Gabungin semua scene jadi satu film...",
+  "Rendering adegan sinematik... 🎬",
+  "Album novelmu hampir jadi!",
+];
+
 const ALBUM_LOADING_MSGS = [
   "Claude lagi dengerin temamu... 🤔",
   "Nulis konsep buat tiap lagu...",
@@ -29,6 +38,7 @@ interface AlbumCreatorProps {
 }
 
 type Phase = "idle" | "generating" | "done" | "error";
+type NovelPhase = "idle" | "generating" | "done" | "error";
 
 const ALBUM_PRICING: Record<number, number> = { 5: 150, 10: 250 };
 
@@ -45,13 +55,24 @@ export default function AlbumCreator({ token, credits, onCreditsUpdate, onTopUp 
   const [draftTitle, setDraftTitle] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
   const [error, setError] = useState("");
+  const [novelPhase, setNovelPhase] = useState<NovelPhase>("idle");
+  const [novelJobId, setNovelJobId] = useState<string | null>(null);
+  const [novelSongsDone, setNovelSongsDone] = useState(0);
+  const [novelSongCount, setNovelSongCount] = useState(0);
+  const [novelVideoUrl, setNovelVideoUrl] = useState<string | null>(null);
+  const [novelError, setNovelError] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const novelPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const creditsRequired = ALBUM_PRICING[songCount];
   const canAfford = credits >= creditsRequired;
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
+  const stopNovelPolling = useCallback(() => {
+    if (novelPollRef.current) { clearInterval(novelPollRef.current); novelPollRef.current = null; }
   }, []);
 
   const pollStatus = useCallback((id: string) => {
@@ -88,7 +109,57 @@ export default function AlbumCreator({ token, credits, onCreditsUpdate, onTopUp 
     }
   }
 
-  useEffect(() => () => stopPolling(), [stopPolling]);
+  useEffect(() => () => { stopPolling(); stopNovelPolling(); }, [stopPolling, stopNovelPolling]);
+
+  const pollNovelStatus = useCallback((id: string) => {
+    stopNovelPolling();
+    novelPollRef.current = setInterval(async () => {
+      try {
+        const res = await apiFetch(`/api/album-novel/status/${id}`, token);
+        if (!res.ok) return;
+        const data = await res.json() as { status: string; songsDone: number; songCount: number; finalVideoUrl: string | null; error: string | null };
+        setNovelSongsDone(data.songsDone);
+        setNovelSongCount(data.songCount);
+        if (data.status === "completed" || data.status === "failed") {
+          stopNovelPolling();
+          if (data.status === "completed" && data.finalVideoUrl) {
+            setNovelVideoUrl(data.finalVideoUrl);
+            setNovelPhase("done");
+          } else {
+            setNovelError(data.error ?? "Gagal buat album novel");
+            setNovelPhase("error");
+          }
+        }
+      } catch { /* keep polling */ }
+    }, 10000);
+  }, [token, stopNovelPolling]);
+
+  async function handleCreateAlbumNovel() {
+    if (!albumId) return;
+    const completedSongs = songs.filter(s => s.status === "completed");
+    setNovelError("");
+    setNovelPhase("generating");
+    setNovelSongsDone(0);
+    setNovelSongCount(completedSongs.length);
+    try {
+      const res = await apiFetch("/api/album-novel/generate", token, {
+        method: "POST",
+        body: JSON.stringify({ albumId }),
+      });
+      const data = await res.json() as { novelJobId?: string; error?: string; creditsRemaining?: number };
+      if (!res.ok || !data.novelJobId) {
+        setNovelPhase("error");
+        setNovelError(data.error ?? "Gagal mulai album novel");
+        return;
+      }
+      if (data.creditsRemaining !== undefined) onCreditsUpdate(data.creditsRemaining);
+      setNovelJobId(data.novelJobId);
+      pollNovelStatus(data.novelJobId);
+    } catch {
+      setNovelPhase("error");
+      setNovelError("Gagal terhubung ke server");
+    }
+  }
 
   async function handleGenerate() {
     if (!theme.trim()) { setError("Tulis tema albummu dulu ya!"); return; }
@@ -120,6 +191,7 @@ export default function AlbumCreator({ token, credits, onCreditsUpdate, onTopUp 
 
   function handleReset() {
     stopPolling();
+    stopNovelPolling();
     setPhase("idle");
     setSongs([]);
     setAlbumId(null);
@@ -128,6 +200,10 @@ export default function AlbumCreator({ token, credits, onCreditsUpdate, onTopUp 
     setEditingTitle(false);
     setError("");
     setTheme("");
+    setNovelPhase("idle");
+    setNovelJobId(null);
+    setNovelVideoUrl(null);
+    setNovelError("");
   }
 
   const completedCount = songs.filter(s => s.status === "completed").length;
@@ -386,6 +462,80 @@ export default function AlbumCreator({ token, credits, onCreditsUpdate, onTopUp 
                 <p className="text-xs text-[var(--text-faint)] text-center">
                   {songs.filter(s => s.status === "failed").length} lagu gagal diproses
                 </p>
+              )}
+            </div>
+
+            {/* ── Album Novel section ── */}
+            <div className="border-t border-[var(--border-subtle)] pt-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🎬</span>
+                <div>
+                  <p className="text-sm font-bold text-[var(--text-primary)]">Album Novel</p>
+                  <p className="text-xs text-[var(--text-faint)]">Bikin video sinematik dari semua lagu sekaligus</p>
+                </div>
+              </div>
+
+              {novelPhase === "idle" && (
+                <button
+                  onClick={() => void handleCreateAlbumNovel()}
+                  className="w-full py-3 rounded-2xl text-sm font-bold transition-all duration-200 active:scale-95"
+                  style={{ background: "linear-gradient(135deg, rgba(255,45,85,0.12), rgba(255,107,53,0.08))", color: "var(--accent-red)", border: "1px solid rgba(255,45,85,0.2)" }}
+                >
+                  🎬 Buat Album Novel ({songs.filter(s => s.status === "completed").length * 50} kredit)
+                </button>
+              )}
+
+              {novelPhase === "generating" && (
+                <div className="card-elevated p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-1">
+                      {[0, 1, 2].map(j => (
+                        <div key={j} className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent-red)", animation: "waveform-bounce 1s ease-in-out infinite", animationDelay: `${j * 0.18}s` }} />
+                      ))}
+                    </div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">
+                      <RotatingText messages={ALBUM_NOVEL_LOADING_MSGS} interval={4000} />
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,45,85,0.1)" }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: novelSongCount > 0 ? `${(novelSongsDone / novelSongCount) * 100}%` : "5%",
+                          background: "linear-gradient(90deg, #ff2d55, #ff6b35)",
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-[var(--text-faint)] ml-3 flex-shrink-0">
+                      {novelSongsDone}/{novelSongCount} lagu
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {novelPhase === "done" && novelVideoUrl && (
+                <div className="space-y-2">
+                  <p className="text-xs text-[var(--text-muted)] font-medium">Album Novel siap!</p>
+                  <video
+                    controls
+                    src={novelVideoUrl}
+                    className="w-full rounded-xl overflow-hidden"
+                    style={{ maxHeight: "280px", background: "#000" }}
+                  />
+                </div>
+              )}
+
+              {novelPhase === "error" && (
+                <div className="card-elevated p-3 space-y-2">
+                  <p className="text-xs text-red-400">{novelError || "Gagal buat album novel"}</p>
+                  <button
+                    onClick={() => { setNovelPhase("idle"); setNovelError(""); }}
+                    className="text-xs font-semibold text-[var(--accent-red)]"
+                  >
+                    Coba lagi →
+                  </button>
+                </div>
               )}
             </div>
 

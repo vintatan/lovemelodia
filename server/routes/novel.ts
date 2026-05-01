@@ -9,7 +9,7 @@ import {
 } from "../lib/db.js";
 import { verifyToken } from "../lib/otp.js";
 import { generateStoryboardImagePrompts, generateEnhancedPromptWithTimepoints, generateSongUnderstanding } from "../lib/anthropic.js";
-import { generateNanoBananaImage, generateCharacterPortrait } from "../lib/wavespeed-nano.js";
+import { generateSceneImage } from "../lib/wavespeed-nano.js";
 import { uploadToGcs } from "../lib/gcs.js";
 import { assembleVideo, cleanupTmpDir } from "../lib/ffmpeg.js";
 import { createNovelJobInSupabase, updateNovelJobInSupabase } from "../lib/supabase.js";
@@ -63,9 +63,7 @@ async function runCapped<T>(tasks: Array<() => Promise<T>>, limit: number): Prom
 
 router.post("/generate", async (req, res) => {
   const phone = req.user!.phone;
-  const { musicJobId, characterImageBase64 } = req.body as {
-    musicJobId?: string; characterImageBase64?: string;
-  };
+  const { musicJobId } = req.body as { musicJobId?: string };
 
   if (!musicJobId) return res.status(400).json({ error: "musicJobId wajib diisi" });
 
@@ -133,23 +131,10 @@ router.post("/generate", async (req, res) => {
         ? [timepointsRaw[0], timepointsRaw[Math.floor(timepointsRaw.length / 2)], timepointsRaw[timepointsRaw.length - 1]]
         : timepointsRaw;
 
-      // Character portrait: use song understanding's portrait prompt, or fall back to user-uploaded image
-      const charImagePromise: Promise<string> = characterImageBase64
-        ? Promise.resolve(`data:image/jpeg;base64,${characterImageBase64}`)
-        : generateCharacterPortrait(
-            songUnderstanding?.characterPortraitPrompt ||
-            `photorealistic portrait of an attractive young Indonesian woman, 20s, striking features, expressive eyes, soft cinematic lighting, shallow depth of field, beautiful, editorial quality, 8k`
-          );
-
-      const storyboardPromise = generateStoryboardImagePrompts({
+      const { prompts, inputTokens: pIn, outputTokens: pOut } = await generateStoryboardImagePrompts({
         songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
         timepoints: timepoints3, genres: [], lyrics: songLyrics, songUnderstanding,
       });
-
-      const [charImageUrl, { prompts, inputTokens: pIn, outputTokens: pOut }] = await Promise.all([
-        charImagePromise,
-        storyboardPromise,
-      ]);
 
       logCost({
         phone, service: "claude", operation: "generateStoryboardPrompts",
@@ -160,13 +145,12 @@ router.post("/generate", async (req, res) => {
       // Generate images with 3-way concurrency; push partial updates as each arrives
       const imageSlots: Array<string | null> = new Array(timepoints3.length).fill(null);
       const tasks = timepoints3.map((tp, i) => async () => {
-        const fullPrompt = prompts[i] ?? "cinematic scene, atmospheric lighting, photorealistic, beautiful, 8k";
+        const fullPrompt = prompts[i] ?? "cinematic landscape, atmospheric lighting, beautiful, 8k";
         console.log(`[Novel] image task ${i} prompt: ${fullPrompt.slice(0, 120)}`);
-        // Retry with a safe fallback if Seedream rejects the detailed prompt
-        const rawUrl = await generateNanoBananaImage(fullPrompt, charImageUrl).catch(async (err) => {
-          console.warn(`[Novel] image task ${i} rejected, retrying with fallback prompt. Error: ${err.message}`);
-          const fallback = `${tp.mood} cinematic scene, ${tp.description.split(",")[0].slice(0, 60)}, atmospheric lighting, photorealistic, 8k`;
-          return generateNanoBananaImage(fallback, charImageUrl);
+        const rawUrl = await generateSceneImage(fullPrompt).catch(async (err) => {
+          console.warn(`[Novel] image task ${i} failed, retrying with fallback. Error: ${err.message}`);
+          const fallback = `${tp.mood} cinematic landscape, ${tp.description.split(",")[0].slice(0, 60)}, atmospheric lighting, beautiful`;
+          return generateSceneImage(fallback);
         });
         imageSlots[i] = rawUrl;
         const partial = imageSlots.filter(Boolean) as string[];
@@ -316,20 +300,13 @@ router.post("/regenerate-image/:jobId/:index", async (req, res) => {
         timepoints: [tp], lyrics: songLyricsRegen,
       }).catch(() => null);
 
-      const [{ prompts }, charImageUrl] = await Promise.all([
-        generateStoryboardImagePrompts({
-          songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
-          timepoints: [tp], genres: [], lyrics: songLyricsRegen, songUnderstanding,
-        }),
-        generateCharacterPortrait(
-          songUnderstanding?.characterPortraitPrompt ||
-          `photorealistic portrait of an attractive young Indonesian woman, 20s, striking features, expressive eyes, soft cinematic lighting, shallow depth of field, beautiful, editorial quality, 8k`
-        ),
-      ]);
+      const { prompts } = await generateStoryboardImagePrompts({
+        songTitle, songDescription, enhancedMusicPrompt: enhancedPrompt,
+        timepoints: [tp], genres: [], lyrics: songLyricsRegen, songUnderstanding,
+      });
 
-      const newUrl = await generateNanoBananaImage(
-        prompts[0] ?? "cinematic landscape, beautiful, photorealistic, atmospheric lighting",
-        charImageUrl,
+      const newUrl = await generateSceneImage(
+        prompts[0] ?? "cinematic landscape, beautiful, atmospheric lighting, photorealistic"
       );
 
       imageUrls[idx] = newUrl;

@@ -83,3 +83,17 @@ export async function generateNanoBananaImage(prompt: string, characterImageUrl:
     enable_sync_mode: true,
   }, apiKey);
 }
+
+export async function generateSceneImage(prompt: string): Promise<string> {
+  const apiKey = process.env.WAVESPEED_API_KEY;
+  if (!apiKey) throw new Error("WAVESPEED_API_KEY not set");
+
+  return wavespeedPost(T2I_ENDPOINT, {
+    prompt: `${prompt}, photorealistic, cinematic lighting, beautiful, high quality, 8k, widescreen 16:9`,
+    negative_prompt: "people, person, human, man, woman, girl, boy, face, body, figure, character, portrait, crowd, silhouette, nsfw, nudity, violence, blood, gore, disturbing, horror, ugly, deformed, watermark, text, letters, words, typography, logo, signature",
+    size: "1280*720",
+    enable_sync_mode: true,
+    num_inference_steps: 35,
+    guidance_scale: 4.5,
+  }, apiKey);
+}

@@ -14,6 +14,7 @@ import stage3Router from "./routes/stage3.js";
 import musicRouter from "./routes/music.js";
 import novelRouter, { novelVideoProxy } from "./routes/novel.js";
 import albumRouter from "./routes/album.js";
+import albumNovelRouter from "./routes/album-novel.js";
 import publicRouter from "./routes/public.js";
 import { requireAuth } from "./middleware/auth.js";
 import { getStaleAssemblyJobs, getStaleAlbums, updateAlbumStatus, addCreditsAsync } from "./lib/db.js";
@@ -72,6 +73,7 @@ app.use("/api/stage2", requireAuth, stage2Router);
 app.use("/api/stage3", requireAuth, stage3Router);
 app.use("/api/music", requireAuth, musicRouter);
 app.use("/api/album", requireAuth, albumRouter);
+app.use("/api/album-novel", requireAuth, albumNovelRouter);
 app.get("/api/novel/video/:jobId", novelVideoProxy);
 app.use("/api/novel", requireAuth, novelRouter);
 
