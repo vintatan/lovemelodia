@@ -136,3 +136,30 @@ export async function assembleVideo(params: {
 export async function cleanupTmpDir(dirPath: string): Promise<void> {
   await rm(dirPath, { recursive: true, force: true }).catch(() => {});
 }
+
+export async function concatenateVideos(videoUrls: string[]): Promise<string> {
+  if (videoUrls.length === 0) throw new Error("No videos to concatenate");
+  const tmpDir = await mkdtemp(path.join(tmpdir(), "kreasi-concat-"));
+  try {
+    const videoPaths: string[] = new Array(videoUrls.length);
+    await Promise.all(
+      videoUrls.map(async (url, i) => {
+        const dest = path.join(tmpDir, `video_${i}.mp4`);
+        await downloadFile(url, dest);
+        videoPaths[i] = dest;
+      })
+    );
+    const listPath = path.join(tmpDir, "list.txt");
+    await writeFile(listPath, videoPaths.map(p => `file '${p}'`).join("\n"));
+    const outputPath = path.join(tmpDir, "output.mp4");
+    await execFileAsync("ffmpeg", [
+      "-f", "concat", "-safe", "0", "-i", listPath,
+      "-c", "copy", "-movflags", "+faststart",
+      "-y", outputPath,
+    ], { maxBuffer: 200 * 1024 * 1024, timeout: 20 * 60 * 1000 });
+    return outputPath;
+  } catch (err) {
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    throw err;
+  }
+}

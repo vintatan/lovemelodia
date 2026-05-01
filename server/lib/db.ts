@@ -146,6 +146,22 @@ try {
 try { db.exec("ALTER TABLE albums ADD COLUMN cover_url TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE albums ADD COLUMN title TEXT"); } catch { /* already exists */ }
 
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS album_novel_jobs (
+    id               TEXT PRIMARY KEY,
+    album_id         TEXT NOT NULL,
+    phone            TEXT NOT NULL,
+    status           TEXT NOT NULL DEFAULT 'generating',
+    songs_done       INTEGER NOT NULL DEFAULT 0,
+    song_count       INTEGER NOT NULL DEFAULT 0,
+    final_video_url  TEXT,
+    error            TEXT,
+    credits_charged  INTEGER NOT NULL,
+    created_at       INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_album_novel_jobs_album ON album_novel_jobs(album_id)");
+} catch { /* already exists */ }
+
 try { db.exec("ALTER TABLE music_jobs ADD COLUMN enhanced_prompt TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE music_jobs ADD COLUMN timepoints_json TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE novel_jobs ADD COLUMN timepoints_json TEXT"); } catch { /* already exists */ }
@@ -205,6 +221,10 @@ const stmts = {
   getAlbumsByPhone:      db.prepare("SELECT * FROM albums WHERE phone = ? ORDER BY created_at DESC LIMIT 30"),
   getAlbumsForJobLookup: db.prepare("SELECT id, theme FROM albums WHERE phone = ?"),
   getStaleAlbums:        db.prepare("SELECT * FROM albums WHERE status = 'generating' AND created_at < ?"),
+
+  insertAlbumNovelJob:   db.prepare("INSERT INTO album_novel_jobs (id, album_id, phone, credits_charged, song_count) VALUES (?, ?, ?, ?, ?)"),
+  getAlbumNovelJob:      db.prepare("SELECT * FROM album_novel_jobs WHERE id = ?"),
+  updateAlbumNovelJob:   db.prepare("UPDATE album_novel_jobs SET status = ?, songs_done = COALESCE(?, songs_done), final_video_url = COALESCE(?, final_video_url), error = COALESCE(?, error) WHERE id = ?"),
 
   insertNovelJob:        db.prepare("INSERT INTO novel_jobs (id, music_job_id, phone) VALUES (?, ?, ?)"),
   getNovelJob:           db.prepare("SELECT * FROM novel_jobs WHERE id = ?"),
@@ -758,6 +778,33 @@ export function getAlbumMapForPhone(phone: string): Record<string, { albumId: st
     } catch { /* skip malformed */ }
   }
   return map;
+}
+
+// ── Album Novel jobs ──────────────────────────────────────────────────────────
+
+export interface AlbumNovelJob {
+  id: string; album_id: string; phone: string;
+  status: string; songs_done: number; song_count: number;
+  final_video_url: string | null; error: string | null;
+  credits_charged: number; created_at: number;
+}
+
+export function createAlbumNovelJob(id: string, albumId: string, phone: string, creditsCharged: number, songCount: number): void {
+  stmts.insertAlbumNovelJob.run(id, albumId, phone, creditsCharged, songCount);
+}
+
+export function getAlbumNovelJob(id: string): AlbumNovelJob | undefined {
+  return stmts.getAlbumNovelJob.get(id) as AlbumNovelJob | undefined;
+}
+
+export function updateAlbumNovelJob(
+  id: string,
+  status: string,
+  songsDone?: number | null,
+  finalVideoUrl?: string | null,
+  error?: string | null,
+): void {
+  stmts.updateAlbumNovelJob.run(status, songsDone ?? null, finalVideoUrl ?? null, error ?? null, id);
 }
 
 export default db;
