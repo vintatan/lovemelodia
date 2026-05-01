@@ -129,20 +129,10 @@ export default function AuthGate({ onAuth, onBack }: AuthGateProps) {
         <motion.div
           animate={{ y: [0, -8, 0] }}
           transition={{ duration: 4, ease: "easeInOut", repeat: Infinity }}
-          className="inline-flex items-center justify-center w-16 h-16 rounded-3xl mb-5 shadow-glow-lg"
-          style={{
-            background: "linear-gradient(135deg, #ff2d55, #dc2626)",
-            boxShadow: "0 0 40px rgba(255,45,85,0.45), 0 0 80px rgba(220,38,38,0.2)",
-          }}
+          className="mb-5"
         >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
-            <path d="M9 18V5l12-2v13M6 21a3 3 0 100-6 3 3 0 000 6zm12-2a3 3 0 100-6 3 3 0 000 6z"/>
-          </svg>
+          <img src="/logo.png" alt="Kreasi AI" className="h-12 object-contain mx-auto" style={{ mixBlendMode: "screen" }} />
         </motion.div>
-
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <span className="heading-display text-xl text-gradient-studio">KREASI AI</span>
-        </div>
 
         <h1
           className="heading-display text-[var(--text-primary)] mb-3"
