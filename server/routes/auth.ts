@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { timingSafeEqual } from "crypto";
 import { normalizePhone, sendWhatsAppText } from "../lib/fonnte.js";
 import { generateOtp, storeOtp, verifyOtp, signToken } from "../lib/otp.js";
 import { getOrCreateUser } from "../lib/db.js";
@@ -52,6 +53,38 @@ router.post("/verify-otp", otpRateLimit, async (req, res) => {
   const user = getOrCreateUser(normalized);
   recordLogin(normalized).catch(() => {});
   bqTrackWhatsApp({ phone: normalized, eventType: "login" });
+  const token = signToken(normalized);
+  return res.json({ success: true, token, phone: normalized, credits: user.credits });
+});
+
+// ── Service login — for trusted services (imaji-mcp) that have already verified the phone ──
+router.post("/service-login", async (req, res) => {
+  const serviceKey = req.headers["x-kreasi-service-key"];
+  const expectedKey = process.env.KREASI_SERVICE_KEY;
+  if (!serviceKey || !expectedKey) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  try {
+    const a = Buffer.from(String(serviceKey));
+    const b = Buffer.from(expectedKey);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+  } catch {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { phone } = req.body as { phone?: string };
+  if (!phone || typeof phone !== "string") {
+    return res.status(400).json({ error: "Phone number required" });
+  }
+  const normalized = normalizePhone(phone);
+  if (normalized.length < 8) {
+    return res.status(400).json({ error: "Invalid phone number" });
+  }
+
+  const user = getOrCreateUser(normalized);
+  recordLogin(normalized).catch(() => {});
   const token = signToken(normalized);
   return res.json({ success: true, token, phone: normalized, credits: user.credits });
 });
