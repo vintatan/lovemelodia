@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { nanoid } from "nanoid";
 import { getOrCreateUserAsync, getCredits, deductCreditsAsync, createTransaction, markPaidAndCredit, getTransactionByExternalIdAsync, redeemFreePromo, hasRedeemedPromo } from "../lib/db.js";
-import { createPaymentLink, getPaymentLinkStatus } from "../lib/airwallex.js";
+import { createPaymentLink, getPaymentLinkStatus, getPaymentLinkStatusById } from "../lib/airwallex.js";
 import { trackPaymentCompleted, hasRedeemedPromoInSupabase } from "../lib/supabase.js";
 
 const router = Router();
@@ -49,7 +49,7 @@ router.post("/purchase", async (req, res) => {
     });
 
     createTransaction({
-      id: nanoid(), phone, externalId, packageName: pkg.name,
+      id: nanoid(), phone, externalId, linkId: payment.id, packageName: pkg.name,
       credits: pkg.credits, amount, currency,
     });
 
@@ -109,7 +109,9 @@ router.post("/verify-payment", async (req, res) => {
   if (tx.status === "PAID") return res.json({ status: "PAID", credits: getCredits(tx.phone) });
 
   try {
-    const status = await getPaymentLinkStatus(externalId);
+    const status = tx.link_id
+      ? await getPaymentLinkStatusById(tx.link_id)
+      : await getPaymentLinkStatus(externalId);
     if (status === "SUCCEEDED" || status === "PAID") {
       const credited = markPaidAndCredit(externalId);
       if (credited) {

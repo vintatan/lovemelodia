@@ -21,6 +21,7 @@ db.exec(`
     id           TEXT PRIMARY KEY,
     phone        TEXT NOT NULL,
     external_id  TEXT UNIQUE NOT NULL,
+    link_id      TEXT,
     package_name TEXT NOT NULL,
     credits      INTEGER NOT NULL,
     amount       INTEGER NOT NULL,
@@ -143,6 +144,7 @@ try {
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_albums_phone ON albums(phone)");
 } catch { /* already exists */ }
+try { db.exec("ALTER TABLE transactions ADD COLUMN link_id TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE albums ADD COLUMN cover_url TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE albums ADD COLUMN title TEXT"); } catch { /* already exists */ }
 
@@ -178,7 +180,7 @@ const stmts = {
   addCredits:          db.prepare("UPDATE users SET credits = credits + ? WHERE phone = ?"),
   hasRedeemedPromo:    db.prepare("SELECT 1 FROM redeemed_promos WHERE phone = ? AND code = ?"),
   insertRedeemedPromo: db.prepare("INSERT INTO redeemed_promos (phone, code) VALUES (?, ?)"),
-  insertTx:            db.prepare("INSERT INTO transactions (id, phone, external_id, package_name, credits, amount, currency) VALUES (?, ?, ?, ?, ?, ?, ?)"),
+  insertTx:            db.prepare("INSERT INTO transactions (id, phone, external_id, link_id, package_name, credits, amount, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"),
   getTxByExtId:        db.prepare("SELECT * FROM transactions WHERE external_id = ?"),
   updateTxStatus:      db.prepare("UPDATE transactions SET status = ?, paid_at = ? WHERE external_id = ?"),
   insertCostLog:       db.prepare("INSERT INTO api_cost_logs (phone, service, operation, model, cost_usd, input_tokens, output_tokens, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"),
@@ -344,10 +346,10 @@ export async function redeemFreePromo(phone: string, code: string, credits: numb
 // ── Transactions ──────────────────────────────────────────────────────────────
 
 export function createTransaction(data: {
-  id: string; phone: string; externalId: string;
+  id: string; phone: string; externalId: string; linkId?: string;
   packageName: string; credits: number; amount: number; currency: string;
 }): void {
-  stmts.insertTx.run(data.id, data.phone, data.externalId, data.packageName, data.credits, data.amount, data.currency);
+  stmts.insertTx.run(data.id, data.phone, data.externalId, data.linkId ?? null, data.packageName, data.credits, data.amount, data.currency);
   createTransactionInSupabase({ externalId: data.externalId, phone: data.phone,
     packageName: data.packageName, credits: data.credits, amount: data.amount,
     currency: data.currency }).catch(() => {});
@@ -355,7 +357,7 @@ export function createTransaction(data: {
 
 export function getTransactionByExternalId(externalId: string) {
   return stmts.getTxByExtId.get(externalId) as {
-    id: string; phone: string; external_id: string; package_name: string;
+    id: string; phone: string; external_id: string; link_id: string | null; package_name: string;
     credits: number; amount: number; currency: string; status: string; paid_at: number | null;
   } | undefined;
 }
@@ -366,7 +368,7 @@ export async function getTransactionByExternalIdAsync(externalId: string) {
   const remote = await getTransactionFromSupabase(externalId);
   if (!remote) return undefined;
   try {
-    stmts.insertTx.run(nanoid(), remote.phone, externalId, remote.package_name,
+    stmts.insertTx.run(nanoid(), remote.phone, externalId, null, remote.package_name,
       remote.credits, remote.amount, remote.currency);
     if (remote.status === "PAID") stmts.updateTxStatus.run("PAID", Date.now(), externalId);
   } catch { }

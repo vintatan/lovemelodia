@@ -61,6 +61,16 @@ export async function createPaymentLink(params: {
   return { id: data.id, externalId: params.externalId, invoiceUrl: data.url, status: data.status, amount: data.amount };
 }
 
+export async function getPaymentLinkStatusById(linkId: string): Promise<string> {
+  const token = await getToken();
+  const res = await fetch(`${baseUrl()}/api/v1/pa/payment_links/${encodeURIComponent(linkId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Airwallex fetch failed (${res.status}): ${await res.text()}`);
+  const data = await res.json() as { status: string };
+  return data.status ?? "UNKNOWN";
+}
+
 export async function getPaymentLinkStatus(externalId: string): Promise<string> {
   const token = await getToken();
   const res = await fetch(`${baseUrl()}/api/v1/pa/payment_links?merchant_order_id=${encodeURIComponent(externalId)}&page_size=1`, {
