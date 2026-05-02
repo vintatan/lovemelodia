@@ -43,10 +43,10 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
         method: "POST",
         body: JSON.stringify({ packageName: pkg.name.toLowerCase() }),
       });
-      const data = await res.json() as { paymentUrl?: string; error?: string };
+      const data = await res.json() as { paymentUrl?: string; externalId?: string; error?: string };
       if (data.paymentUrl) {
-        window.open(data.paymentUrl, "_blank");
-        onPurchased?.();
+        if (data.externalId) sessionStorage.setItem("kreasi_pending_payment", data.externalId);
+        window.location.href = data.paymentUrl;
       } else {
         alert(data.error ?? "Failed to create payment link");
       }

@@ -35,13 +35,12 @@ router.post("/airwallex", async (req: any, res) => {
       return res.status(401).json({ error: "Invalid webhook signature" });
     }
 
-    const event = req.body as { name?: string; data?: { merchant_order_id?: string } };
-    if (event.name !== "payment_link.SUCCEEDED") {
+    const event = req.body as { data?: { object?: { merchant_order_id?: string; status?: string } } };
+    const externalId = event.data?.object?.merchant_order_id;
+    const rawStatus = event.data?.object?.status;
+    if (!externalId || rawStatus !== "SUCCEEDED") {
       return res.json({ received: true });
     }
-
-    const externalId = event.data?.merchant_order_id;
-    if (!externalId) return res.status(400).json({ error: "Missing merchant_order_id" });
 
     const tx = await getTransactionByExternalIdAsync(externalId);
     if (!tx) return res.status(404).json({ error: "Transaction not found" });

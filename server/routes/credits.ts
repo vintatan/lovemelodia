@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { nanoid } from "nanoid";
-import { getOrCreateUserAsync, getCredits, deductCreditsAsync, createTransaction, markPaidAndCredit, redeemFreePromo, hasRedeemedPromo } from "../lib/db.js";
-import { createPaymentLink } from "../lib/airwallex.js";
+import { getOrCreateUserAsync, getCredits, deductCreditsAsync, createTransaction, markPaidAndCredit, getTransactionByExternalIdAsync, redeemFreePromo, hasRedeemedPromo } from "../lib/db.js";
+import { createPaymentLink, getPaymentLinkStatus } from "../lib/airwallex.js";
 import { trackPaymentCompleted, hasRedeemedPromoInSupabase } from "../lib/supabase.js";
 
 const router = Router();
@@ -95,6 +95,34 @@ router.post("/redeem-promo", async (req, res) => {
   const result = await redeemFreePromo(phone, code.toUpperCase(), credits);
   if (!result.success) return res.status(409).json({ error: result.reason });
   return res.json({ success: true, creditsAdded: credits, credits: getCredits(phone) });
+});
+
+// POST /api/credits/verify-payment — webhook fallback, called by frontend on return from Airwallex
+router.post("/verify-payment", async (req, res) => {
+  const { externalId } = req.body as { externalId?: string };
+  if (!externalId || typeof externalId !== "string" || !externalId.startsWith("kreasi-")) {
+    return res.status(400).json({ error: "Invalid externalId" });
+  }
+
+  const tx = await getTransactionByExternalIdAsync(externalId);
+  if (!tx) return res.status(404).json({ error: "Transaction not found" });
+  if (tx.status === "PAID") return res.json({ status: "PAID", credits: getCredits(tx.phone) });
+
+  try {
+    const status = await getPaymentLinkStatus(externalId);
+    if (status === "SUCCEEDED" || status === "PAID") {
+      const credited = markPaidAndCredit(externalId);
+      if (credited) {
+        console.log(`[verify-payment] Credited ${tx.credits} to ${tx.phone} via poll (${externalId})`);
+        trackPaymentCompleted(tx as any);
+      }
+      return res.json({ status: "PAID", credits: getCredits(tx.phone) });
+    }
+    return res.json({ status, credits: getCredits(tx.phone) });
+  } catch (err) {
+    console.error("[verify-payment] error:", err);
+    return res.status(500).json({ error: "Failed to verify payment" });
+  }
 });
 
 export default router;

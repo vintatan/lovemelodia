@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import LandingPage from "./components/LandingPage.tsx";
 import AuthGate from "./components/AuthGate.tsx";
 import CreatorShell from "./components/CreatorShell.tsx";
@@ -31,6 +31,26 @@ export default function App() {
     setAuth(updated);
     sessionStorage.setItem("kreasi_auth", JSON.stringify(updated));
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const externalId = params.get("ext") ?? sessionStorage.getItem("kreasi_pending_payment");
+    if (!externalId || !auth) return;
+    sessionStorage.removeItem("kreasi_pending_payment");
+    window.history.replaceState({}, "", window.location.pathname);
+    fetch("/api/credits/verify-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth.token}` },
+      body: JSON.stringify({ externalId }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { status?: string; credits?: number } | null) => {
+        if (data?.status === "PAID" && typeof data.credits === "number") {
+          updateCredits(data.credits);
+        }
+      })
+      .catch(() => {});
+  }, [auth?.token]);
 
   if (auth && view === "creator") {
     return (
