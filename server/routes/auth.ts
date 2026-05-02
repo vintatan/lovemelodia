@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { normalizePhone, sendWhatsAppText } from "../lib/fonnte.js";
 import { generateOtp, storeOtp, verifyOtp, signToken } from "../lib/otp.js";
-import { getOrCreateUser } from "../lib/db.js";
+import { getOrCreateUserAsync } from "../lib/db.js";
 import { recordLogin } from "../lib/supabase.js";
 import { bqTrackWhatsApp } from "../lib/bigquery.js";
 import { otpRateLimit } from "../middleware/rateLimit.js";
@@ -49,7 +49,7 @@ router.post("/verify-otp", otpRateLimit, async (req, res) => {
   if (!valid) {
     return res.status(401).json({ error: "Invalid or expired OTP" });
   }
-  const user = getOrCreateUser(normalized);
+  const user = await getOrCreateUserAsync(normalized);
   recordLogin(normalized).catch(() => {});
   bqTrackWhatsApp({ phone: normalized, eventType: "login" });
   const token = signToken(normalized);
