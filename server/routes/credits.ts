@@ -36,7 +36,9 @@ router.post("/purchase", async (req, res) => {
 
   const externalId = `kreasi-${nanoid()}`;
   const amount = currency === "SGD" ? pkg.amountSgd : pkg.amountIdr;
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const origin = req.headers.origin || req.headers.referer?.replace(/\/$/, "") || "";
+  const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0].trim() ?? req.protocol;
+  const appUrl = origin || process.env.APP_URL || `${proto}://${req.get("host")}`;
 
   try {
     const payment = await createPaymentLink({
