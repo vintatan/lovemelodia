@@ -60,14 +60,15 @@ router.post("/generate", generationRateLimit, async (req, res) => {
     return res.status(400).json({ error: "Prompt terlalu panjang (maksimal 500 karakter)" });
   }
 
-  const user = await getOrCreateUserAsync(phone);
-  if (user.credits < MUSIC_CREDITS) {
-    return res.status(402).json({ error: "Kredit tidak cukup", credits: user.credits });
-  }
-
-  const deducted = await deductCreditsAsync(phone, MUSIC_CREDITS);
-  if (!deducted) {
-    return res.status(402).json({ error: "Kredit tidak cukup", credits: getCredits(phone) });
+  if (!(req as any).servicePhone) {
+    const user = await getOrCreateUserAsync(phone);
+    if (user.credits < MUSIC_CREDITS) {
+      return res.status(402).json({ error: "Kredit tidak cukup", credits: user.credits });
+    }
+    const deducted = await deductCreditsAsync(phone, MUSIC_CREDITS);
+    if (!deducted) {
+      return res.status(402).json({ error: "Kredit tidak cukup", credits: getCredits(phone) });
+    }
   }
 
   const jobId = nanoid();
