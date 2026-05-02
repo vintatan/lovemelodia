@@ -316,6 +316,10 @@ export async function addCreditsAsync(phone: string, amount: number, type: "topu
 
 // ── Promos ────────────────────────────────────────────────────────────────────
 
+export function hasRedeemedPromo(phone: string, code: string): boolean {
+  return !!stmts.hasRedeemedPromo.get(phone, code);
+}
+
 export async function redeemFreePromo(phone: string, code: string, credits: number): Promise<{ success: boolean; reason?: string }> {
   if (stmts.hasRedeemedPromo.get(phone, code)) {
     return { success: false, reason: "Kode promo sudah pernah digunakan" };

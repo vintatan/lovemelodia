@@ -7,14 +7,15 @@ interface Package {
   name: string;
   credits: number;
   price: string;
+  priceSgd?: string;
   originalPrice?: string;
   highlight?: boolean;
 }
 
 const PACKAGES: Package[] = [
-  { name: "Starter", credits: 20,  price: "Rp 10.000", originalPrice: "Rp 25.000" },
-  { name: "Creator", credits: 50,  price: "Rp 55.000", highlight: true },
-  { name: "Studio",  credits: 120, price: "Rp 115.000" },
+  { name: "Starter", credits: 20,  price: "Rp 10.000",  priceSgd: "SGD 1",  originalPrice: "Rp 25.000" },
+  { name: "Creator", credits: 50,  price: "Rp 55.000",  priceSgd: "SGD 6",  highlight: true },
+  { name: "Studio",  credits: 120, price: "Rp 115.000", priceSgd: "SGD 12" },
 ];
 
 const CREDIT_COSTS: Array<{ action: string; cost: string }> = [
@@ -40,7 +41,7 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
     try {
       const res = await apiFetch("/api/credits/purchase", token, {
         method: "POST",
-        body: JSON.stringify({ packageName: pkg.name.toLowerCase(), amount: pkg.credits }),
+        body: JSON.stringify({ packageName: pkg.name.toLowerCase() }),
       });
       const data = await res.json() as { paymentUrl?: string; error?: string };
       if (data.paymentUrl) {
@@ -117,6 +118,9 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
                           {pkg.originalPrice && (
                             <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5">PROMO</span>
                           )}
+                          {pkg.highlight && !pkg.originalPrice && (
+                            <span className="text-[10px] font-bold text-violet-400 bg-violet-400/10 border border-violet-400/20 rounded px-1.5 py-0.5">BEST VALUE</span>
+                          )}
                         </div>
                         <p className="text-xs text-[var(--text-muted)]">{pkg.credits} credits</p>
                       </div>
@@ -128,7 +132,7 @@ export default function CreditsModal({ open, credits, token, onClose, onPurchase
                       <p className={`text-sm font-semibold ${pkg.highlight ? "text-[var(--accent-violet)]" : "text-[var(--accent-red)]"}`}>
                         {pkg.price}
                       </p>
-                      {pkg.highlight && <p className="text-xs text-[var(--accent-violet)]/70">Best value</p>}
+                      {pkg.priceSgd && <p className="text-[10px] text-[var(--text-faint)]">{pkg.priceSgd}</p>}
                     </div>
                   </button>
                 ))}

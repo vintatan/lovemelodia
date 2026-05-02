@@ -1,15 +1,21 @@
 import { Router } from "express";
 import { nanoid } from "nanoid";
-import { getOrCreateUserAsync, getCredits, deductCreditsAsync, createTransaction, markPaidAndCredit, redeemFreePromo } from "../lib/db.js";
-import { createPaymentRequest } from "../lib/hitpay.js";
-import { trackPaymentCompleted } from "../lib/supabase.js";
+import { getOrCreateUserAsync, getCredits, deductCreditsAsync, createTransaction, markPaidAndCredit, redeemFreePromo, hasRedeemedPromo } from "../lib/db.js";
+import { createPaymentLink } from "../lib/airwallex.js";
+import { trackPaymentCompleted, hasRedeemedPromoInSupabase } from "../lib/supabase.js";
 
 const router = Router();
 
+const PROMO_MAP: Record<string, number> = {
+  KREASI100: 100,
+  KREASI50:  50,
+  IMAJIEASY: 50,
+};
+
 const PACKAGES = [
-  { name: "starter", credits: 20,  amountIdr: 10000,  amountSgd: 1 },
-  { name: "creator", credits: 50,  amountIdr: 55000,  amountSgd: 6 },
-  { name: "pro",     credits: 120, amountIdr: 115000, amountSgd: 12 },
+  { name: "starter", credits: 20,  amountIdr: 10_000,  amountSgd: 1  },
+  { name: "creator", credits: 50,  amountIdr: 55_000,  amountSgd: 6  },
+  { name: "studio",  credits: 120, amountIdr: 115_000, amountSgd: 12 },
 ];
 
 router.get("/balance", async (req, res) => {
@@ -31,16 +37,15 @@ router.post("/purchase", async (req, res) => {
   const externalId = `kreasi-${nanoid()}`;
   const amount = currency === "SGD" ? pkg.amountSgd : pkg.amountIdr;
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
-  const webhookUrl = `${appUrl}/api/webhook/hitpay`;
 
   try {
-    const payment = await createPaymentRequest({
+    const payment = await createPaymentLink({
+      externalId,
       amount,
       currency: currency as "IDR" | "SGD",
-      purpose: `Kreasi AI ${pkg.credits} Credits`,
-      referenceNumber: externalId,
-      redirectUrl: `${appUrl}?payment=success&ext=${externalId}`,
-      webhookUrl,
+      description: `Kreasi AI ${pkg.name} — ${pkg.credits} credits`,
+      returnUrl: `${appUrl}?payment=success&ext=${externalId}`,
+      cancelUrl: `${appUrl}?payment=cancelled`,
     });
 
     createTransaction({
@@ -48,7 +53,7 @@ router.post("/purchase", async (req, res) => {
       credits: pkg.credits, amount, currency,
     });
 
-    return res.json({ paymentUrl: payment.url, externalId });
+    return res.json({ paymentUrl: payment.invoiceUrl, externalId });
   } catch (err: any) {
     console.error("[Credits] purchase error:", err);
     return res.status(500).json({ error: "Payment creation failed" });
@@ -70,15 +75,20 @@ router.post("/deduct", async (req, res) => {
   return res.json({ credits: getCredits(phone) });
 });
 
+// GET /api/credits/promo-status — check if authenticated user has redeemed the free promo
+router.get("/promo-status", async (req, res) => {
+  const phone = req.user!.phone;
+  const code = "IMAJIEASY";
+  if (hasRedeemedPromo(phone, code)) return res.json({ redeemed: true });
+  const redeemedInSupabase = await hasRedeemedPromoInSupabase(phone, code);
+  return res.json({ redeemed: redeemedInSupabase });
+});
+
 router.post("/redeem-promo", async (req, res) => {
   const phone = req.user!.phone;
   const { code } = req.body as { code?: string };
   if (!code) return res.status(400).json({ error: "Promo code required" });
 
-  const PROMO_MAP: Record<string, number> = {
-    KREASI100: 100,
-    KREASI50:  50,
-  };
   const credits = PROMO_MAP[code.toUpperCase()];
   if (!credits) return res.status(400).json({ error: "Invalid promo code" });
 
