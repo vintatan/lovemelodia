@@ -1,4 +1,5 @@
 import { randomInt, createHmac, timingSafeEqual } from "crypto";
+import { supabase } from "./supabase.js";
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const memStore = new Map<string, { otp: string; expiresAt: number }>();
@@ -7,11 +8,31 @@ export function generateOtp(): string {
   return String(randomInt(100000, 999999));
 }
 
-export function storeOtp(phone: string, otp: string): void {
+export async function storeOtp(phone: string, otp: string): Promise<void> {
+  if (supabase) {
+    const expires_at = new Date(Date.now() + OTP_TTL_MS).toISOString();
+    await supabase.from("otp_store").upsert({ phone, otp, expires_at });
+    return;
+  }
   memStore.set(phone, { otp, expiresAt: Date.now() + OTP_TTL_MS });
 }
 
-export function verifyOtp(phone: string, otp: string): boolean {
+export async function verifyOtp(phone: string, otp: string): Promise<boolean> {
+  if (supabase) {
+    const { data } = await supabase
+      .from("otp_store")
+      .select("otp, expires_at")
+      .eq("phone", phone)
+      .maybeSingle();
+    if (!data) return false;
+    if (new Date((data as { expires_at: string }).expires_at) < new Date()) {
+      await supabase.from("otp_store").delete().eq("phone", phone);
+      return false;
+    }
+    if ((data as { otp: string }).otp !== otp) return false;
+    await supabase.from("otp_store").delete().eq("phone", phone);
+    return true;
+  }
   const entry = memStore.get(phone);
   if (!entry) return false;
   if (Date.now() > entry.expiresAt) { memStore.delete(phone); return false; }
