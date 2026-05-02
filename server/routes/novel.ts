@@ -74,11 +74,12 @@ router.post("/generate", async (req, res) => {
     return res.status(400).json({ error: "Musik belum selesai dibuat" });
   }
 
-  const user = await getOrCreateUserAsync(phone);
-  if (user.credits < NOVEL_CREDITS) return res.status(402).json({ error: "Kredit tidak cukup", credits: user.credits });
-
-  const deducted = await deductCreditsAsync(phone, NOVEL_CREDITS);
-  if (!deducted) return res.status(402).json({ error: "Kredit tidak cukup", credits: getCredits(phone) });
+  if (!(req as any).servicePhone) {
+    const user = await getOrCreateUserAsync(phone);
+    if (user.credits < NOVEL_CREDITS) return res.status(402).json({ error: "Kredit tidak cukup", credits: user.credits });
+    const deducted = await deductCreditsAsync(phone, NOVEL_CREDITS);
+    if (!deducted) return res.status(402).json({ error: "Kredit tidak cukup", credits: getCredits(phone) });
+  }
 
   const jobId = nanoid();
   createNovelJob(jobId, musicJobId, phone);

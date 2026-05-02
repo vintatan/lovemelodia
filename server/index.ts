@@ -17,6 +17,7 @@ import albumRouter from "./routes/album.js";
 import albumNovelRouter from "./routes/album-novel.js";
 import publicRouter from "./routes/public.js";
 import { requireAuth } from "./middleware/auth.js";
+import { serviceAuthOrRequireAuth } from "./middleware/serviceAuth.js";
 import { getStaleAssemblyJobs, getStaleAlbums, updateAlbumStatus, addCreditsAsync } from "./lib/db.js";
 import { updateAlbumInSupabase } from "./lib/supabase.js";
 import { ensureBucketPublicAccess } from "./lib/gcs.js";
@@ -65,17 +66,17 @@ app.use((req, res, next) => {
 });
 
 app.use("/api/auth", authRouter);
-app.use("/api/credits", requireAuth, creditsRouter);
+app.use("/api/credits", serviceAuthOrRequireAuth, creditsRouter);
 app.use("/api/webhooks", webhookRouter);
 app.use("/api/projects", requireAuth, projectsRouter);
 app.use("/api/stage1", requireAuth, stage1Router);
 app.use("/api/stage2", requireAuth, stage2Router);
 app.use("/api/stage3", requireAuth, stage3Router);
-app.use("/api/music", requireAuth, musicRouter);
+app.use("/api/music", serviceAuthOrRequireAuth, musicRouter);
 app.use("/api/album", requireAuth, albumRouter);
 app.use("/api/album-novel", requireAuth, albumNovelRouter);
 app.get("/api/novel/video/:jobId", novelVideoProxy);
-app.use("/api/novel", requireAuth, novelRouter);
+app.use("/api/novel", serviceAuthOrRequireAuth, novelRouter);
 
 app.use("/api/public", publicRouter);
 app.get("/api/health", (_req, res) => res.json({ ok: true }));

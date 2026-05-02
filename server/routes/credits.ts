@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { nanoid } from "nanoid";
-import { getOrCreateUserAsync, getCredits, createTransaction, markPaidAndCredit, redeemFreePromo } from "../lib/db.js";
+import { getOrCreateUserAsync, getCredits, deductCreditsAsync, createTransaction, markPaidAndCredit, redeemFreePromo } from "../lib/db.js";
 import { createPaymentRequest } from "../lib/hitpay.js";
 import { trackPaymentCompleted } from "../lib/supabase.js";
 
@@ -53,6 +53,21 @@ router.post("/purchase", async (req, res) => {
     console.error("[Credits] purchase error:", err);
     return res.status(500).json({ error: "Payment creation failed" });
   }
+});
+
+// Called by imaji-mcp before each paid tool call — service JWT required
+router.post("/deduct", async (req, res) => {
+  if (!(req as any).servicePhone) return res.status(403).json({ error: "Service authorization required" });
+  const { amount } = req.body as { amount?: number };
+  if (typeof amount !== "number" || amount <= 0) return res.status(400).json({ error: "amount required" });
+  const phone = req.user!.phone;
+  const user = await getOrCreateUserAsync(phone);
+  if (user.credits < amount) {
+    return res.status(402).json({ error: "Kredit tidak cukup", credits: user.credits });
+  }
+  const deducted = await deductCreditsAsync(phone, amount);
+  if (!deducted) return res.status(402).json({ error: "Kredit tidak cukup", credits: getCredits(phone) });
+  return res.json({ credits: getCredits(phone) });
 });
 
 router.post("/redeem-promo", async (req, res) => {
