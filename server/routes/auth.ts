@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { normalizePhone, sendWhatsAppText } from "../lib/fonnte.js";
 import { generateOtp, storeOtp, verifyOtp, signToken } from "../lib/otp.js";
-import { getOrCreateUserAsync } from "../lib/db.js";
+import { getOrCreateUserAsync, addCreditsAsync, hasAnyTransaction } from "../lib/db.js";
 import { recordLogin } from "../lib/supabase.js";
 import { bqTrackWhatsApp } from "../lib/bigquery.js";
 import { otpRateLimit } from "../middleware/rateLimit.js";
@@ -24,8 +24,8 @@ router.post("/send-otp", otpRateLimit, async (req, res) => {
     if (IS_DEV) console.log(`\n[Auth] DEV OTP for ${normalized}: ${otp}\n`);
 
     const message =
-      `*${otp}* adalah kode login Kreasi AI Anda. Berlaku 5 menit.\n\n` +
-      `*${otp}* is your Kreasi AI login code. Valid for 5 minutes.`;
+      `*${otp}* adalah kode login Lovemelodia Anda. Berlaku 5 menit.\n\n` +
+      `*${otp}* is your Lovemelodia login code. Valid for 5 minutes.`;
 
     res.json({ success: true, phone: normalized });
 
@@ -50,6 +50,11 @@ router.post("/verify-otp", otpRateLimit, async (req, res) => {
     return res.status(401).json({ error: "Invalid or expired OTP" });
   }
   const user = await getOrCreateUserAsync(normalized);
+  const isNewUser = user.credits === 0 && !hasAnyTransaction(normalized);
+  if (isNewUser) {
+    await addCreditsAsync(normalized, 3, "topup_approved");
+    user.credits = 3;
+  }
   recordLogin(normalized).catch(() => {});
   bqTrackWhatsApp({ phone: normalized, eventType: "login" });
   const token = signToken(normalized);

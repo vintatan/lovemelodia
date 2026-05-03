@@ -1,104 +1,87 @@
-# ROADMAP.md — Kreasi AI
+# ROADMAP.md — Lovemelodia
 
-## Milestone 1: Foundation + Full Stack
-**Goal:** Working end-to-end app: auth → stage1 → stage2 → stage3 → MP4
+## Milestone 1: Foundation
 
-### Phase 1.1 — Project Scaffold [ ]
-- Init git, package.json (ESM, Vite + React 19 + Express)
-- tsconfig.json, vite.config.ts, index.html
-- .env.example, .gitignore, .dockerignore
-- Create GitHub repo imaji/kreasi-ai, set remote, initial commit
+### Phase 1.1 — Scaffold + Branding [ ]
+- Rename all "Kreasi AI" references → "Lovemelodia" throughout codebase
+- Update color palette: warm burgundy/rose gold/amber (away from red/orange)
+- New logo placeholder + favicon
+- Update index.html title, meta description
+- i18n scaffold: BI + English toggle
+- Update .env.example with lovemelodia-specific vars
+- Remove kreasi-ai-specific routes (album, novel, wizard)
 
-### Phase 1.2 — Server Foundation [ ]
-- server/index.ts (Express app, static serve, CORS, compression)
-- server/lib/db.ts (SQLite: users, transactions, projects, frame_jobs, assembly_jobs)
-- server/lib/otp.ts (generateOtp, storeOtp, verifyOtp, signToken, verifyToken)
-- server/middleware/auth.ts (requireAuth JWT middleware)
-- server/middleware/rateLimit.ts (copy from jati-ai-space)
+### Phase 1.2 — Auth + Credits [ ]
+- Port WhatsApp OTP auth from kreasi-ai (Fonnte) — keep as-is
+- New credit model: 1 credit = 1 gift card generation
+- New users: 3 free credits on signup
+- Remove old credit packages, add: Starter 5 / Creator 15 / Unlimited monthly
 
-### Phase 1.3 — Copy Server Libs [ ]
-- server/lib/fonnte.ts (copy from jati-ai-space)
-- server/lib/gcs.ts (copy from jati-ai-space)
-- server/lib/airwallex.ts (copy from jati-ai-space)
-- server/lib/cost-logger.ts (copy from jati-ai-space)
-- server/lib/supabase.ts (copy from jati-ai-space)
+### Phase 1.3 — Payments [ ]
+- HitPay for IDR (port from kreasi-ai)
+- Stripe for global (USD, SGD, etc.)
 
-### Phase 1.4 — Auth + Credits Routes [ ]
-- server/routes/auth.ts (send-otp, verify-otp, 100 credits on signup)
-- server/routes/credits.ts (balance, purchase, redeem-promo, verify-payment)
-- server/routes/webhook.ts (Airwallex payment confirmation)
-- server/routes/projects.ts (history, load by id)
+## Milestone 2: Music Generation
 
-### Phase 1.5 — AI Integrations (parallel) [ ]
-- server/lib/wavespeed.ts (Seedream v4.5 image gen — port from jati-ai-space)
-- server/lib/lyria.ts (WaveSpeed Lyria 3 Pro music gen — new)
-- server/lib/anthropic.ts (Claude vision prompt enhancement + timepoints — new)
+### Phase 2.1 — Text-to-Music (Lyria 3 Pro) [ ]
+- Port /api/music/generate + status polling from kreasi-ai
+- Simplified prompt: occasion selector → auto-generate prompt
+- One-shot generation (no enhance-prompt step)
 
-### Phase 1.6 — Stage Routes [ ]
-- server/routes/stage1.ts (POST /enhance — Claude vision → timepoints)
-- server/routes/stage2.ts (POST /generate-frame, /regenerate-frame, /approve)
-- server/routes/stage3.ts (POST /assemble 202, GET /status/:jobId)
+### Phase 2.2 — Voice Melody Input (LeVo) [ ]
+- Browser MediaRecorder (iOS MP4 + Android WebM)
+- POST /api/music/upload-recording → GCS
+- POST /api/music/generate-from-melody → WaveSpeed SongGeneration (LeVo)
+- Same polling/done flow as Lyria
 
-### Phase 1.7 — FFmpeg Assembly [ ]
-- server/lib/ffmpeg.ts (assembleVideo: Ken Burns + xfade with per-timepoint intensity + music overlay)
-- Intensity-driven zoom speed: low=0.0005, medium=0.001, high=0.003
-- Variable xfade duration from timepoint.transitionDuration (0.3–1.2s)
+## Milestone 3: Gift Card System
 
-## Milestone 2: Frontend Wizard
+### Phase 3.1 — Image + Video + Print Generation [ ]
+- Sharp image composition: template BG + message + QR + watermark → 1080×1080 PNG
+- FFmpeg Stories video → 1080×1920 MP4, 15s
+- Print tag → 85×55mm 300dpi PNG (QR + message + hole punch)
+- 12 occasion template PNGs in public/templates/
+- Public share page: /gift/:shareId (no auth required)
 
-### Phase 2.1 — Design System + Auth UI [ ]
-- src/index.css (copy jati-ai-space color tokens, shadow-glow, gradients)
-- src/App.tsx (AuthGate → WizardShell, single canvas, no router)
-- src/components/UI.tsx (Button, Spinner, Toast, Card — jati-ai-space design)
-- src/components/AuthGate.tsx (phone OTP flow)
-- src/components/CreditsBadge.tsx, CreditsModal.tsx
+### Phase 3.2 — Custom Photo Upload [ ]
+- File upload (JPG/PNG/WebP, max 5MB) as custom template background
+- Auto-crop to cover art area
 
-### Phase 2.2 — Stage 1 Components [ ]
-- Stage1Form.tsx (character upload + theme picker + vibe input)
-- CharacterUploader.tsx (drag-drop image)
-- ThemePicker.tsx (fairytale/real life/city/sci-fi/nature cards)
-- Stage1Result.tsx (enhanced prompt review + timepoint timeline)
-- TimepointTimeline.tsx (scrollable dramatic arc cards)
+### Phase 3.3 — Vinyl Print Templates (Premium Add-On) [ ]
+- Vinyl record-style print template: circular dark disc with groove rings, center label with QR code
+- Output formats:
+  - 148×148mm square card (7" vinyl style) — print at home, 300dpi PNG
+  - A4 sticker sheet (4 vinyl stickers per sheet) — print on sticker paper
+  - Animated vinyl rotation video (9:16, 15s) — for social sharing
+- Center label design: recipient name + occasion + track title + QR code + lovemelodia.com
+- 12 label color themes matching occasion templates
+- Premium service: additional 1 credit on top of base gift card generation
+- The vinyl card IS the physical gift — stick it on the chocolate box, slip into bouquet, mail it
 
-### Phase 2.3 — Stage 2 Storyboard [ ]
-- Stage2Storyboard.tsx (sequential frame generation with progress)
-- StoryboardGrid.tsx (comic-strip responsive grid)
-- StoryboardFrame.tsx (image + mood badge + regen button)
+### Phase 2.3 — Story Interview (Lyric Builder) [ ]
+- Before music generation, bot asks 3-5 emotionally-targeted questions by occasion
+- Questions surface real memories → Claude builds personalized lyrics from answers
+- Question sets per occasion (examples):
+  - Mother's Day: "Apa kenangan paling berkesan bersama ibumu?", "Kalimat apa yang selalu ibu kamu ucapkan?", "Momen apa yang bikin kamu paling bangga di depan ibumu?"
+  - Lover: "Momen pertama kamu sadar jatuh cinta?", "Hal terkecil yang dia lakuin yang bikin kamu senyum sendiri?"
+  - Birthday: "Apa pencapaian terbesar orang ini tahun ini?", "Apa yang bikin kamu paling bangga sama dia?"
+  - Friendship: "Kenangan paling lucu atau berkesan kalian berdua?", "Apa yang kamu paling syukuri dari persahabatan ini?"
+- Conversational UI: one question at a time, animated typing effect, warm tone
+- Answers → Claude Sonnet → lyric outline + emotional prompt → passed to Lyria for generation
+- New endpoint: POST /api/music/build-story → { occasion, answers[] } → { enhancedPrompt, lyricOutline }
 
-### Phase 2.4 — Stage 3 Assembly + Video [ ]
-- Stage3Assembly.tsx (async progress: generating_music → assembling → done)
-- VideoPlayer.tsx (final MP4 player + download button)
+## Milestone 4: Landing Page + Launch
 
-## Milestone 3: Ship
+### Phase 4.1 — Emotional Landing Page [ ]
+- Full-bleed warm hero: golden hour, human connection, NO product UI above fold
+- Headline: "Ada lagu yang cuma buat kamu." / "A song made just for you."
+- Scroll sections: 4 human stories (mother/bouquet, best friends, couple, grandchild)
+- Color palette: deep burgundy, rose gold, amber, candlelight cream
+- Ambient muted background music
+- Final CTA: "Siapa yang ingin kamu kirimkan musiknya hari ini?"
 
-### Phase 3.1 — Docker + CI/CD [ ]
-- Dockerfile (node:20-slim + apt install ffmpeg + Vite build)
-- .github/workflows/ci.yml (lint + build + playwright)
-- .github/workflows/deploy.yml (Cloud Run asia-southeast1, --timeout=900 --memory=2Gi)
-
-### Phase 3.2 — Push + PR [x]
-- Push to imaji/kreasi-ai
-- Open pull request
-
-## Milestone 4: Music UX & Persistence
-
-### Phase 4.1 — Fix Music Player [ ]
-- Diagnose audio not playing (CORS on Wavespeed URL, proxy if needed)
-- Verify audioUrl flows correctly from status poll → MusicCreator state → <audio> src
-
-### Phase 4.2 — Indonesian Gen Z Prompt Engineering [ ]
-- Update enhanceMusicPrompt() in server/lib/anthropic.ts
-- System prompt: Indonesian language, Gen Z viral tone, music/song focus only
-- No video language — output is pure music production brief
-
-### Phase 4.3 — Enhance Prompt Button (Frontend) [ ]
-- POST /api/music/enhance-prompt endpoint (new server route)
-- Returns enhanced prompt with dramatic timepoints in Indonesian
-- Add "Perkuat Prompt" button to MusicCreator.tsx
-- Show timepoints preview below textarea before generating
-
-### Phase 4.4 — Supabase Persistence [ ]
-- Ensure SUPABASE_URL + SUPABASE_SERVICE_KEY match jati-ai-space keys
-- Persist music_jobs to Supabase (id, phone, prompt, enhanced_prompt, status, audio_url)
-- Add enhanced_prompt column to music_jobs schema
-- Store enhanced_prompt on job creation; update on completion
+### Phase 4.2 — Ship [ ]
+- GitHub repo: imaji/lovemelodia
+- Cloud Run: lovemelodia service, asia-southeast1
+- Domain: lovemelodia.com
+- Launch: Instagram, TikTok, WhatsApp groups (Indonesia first)

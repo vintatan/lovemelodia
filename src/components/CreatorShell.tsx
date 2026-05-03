@@ -7,10 +7,8 @@ import CreditsModal from "./CreditsModal.tsx";
 import NewMemberModal from "./NewMemberModal.tsx";
 import MusicCreator from "./music/MusicCreator.tsx";
 import MusicHistory from "./music/MusicHistory.tsx";
-import NovelTab from "./music/NovelTab.tsx";
-import AlbumCreator from "./music/AlbumCreator.tsx";
 
-type Mode = "music" | "history" | "novel" | "album" | "video";
+type Mode = "music" | "history";
 
 const NAV_MODES: {
   id: Mode;
@@ -20,10 +18,7 @@ const NAV_MODES: {
   soon?: boolean;
   live?: boolean;
 }[] = [
-  { id: "music",   icon: "🎵", label: "Musik",        desc: "Buat lagu baru" },
-  { id: "novel",   icon: "📖", label: "Musik Novel",  desc: "Audio + visual", live: true },
-  { id: "album",   icon: "💿", label: "Album",        desc: "Paket 5–10 lagu", live: true },
-  { id: "video",   icon: "🎬", label: "Musik Video",  desc: "Video sinematik", soon: true },
+  { id: "music",   icon: "🎵", label: "Musik",   desc: "Buat lagu baru", live: true },
 ];
 
 interface CreatorShellProps {
@@ -38,9 +33,9 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
   const [creditsModalOpen, setCreditsModalOpen] = useState(false);
   const [newMemberOpen, setNewMemberOpen] = useState(() => {
     if (credits > 0) return false;
-    const shown = sessionStorage.getItem("kreasi_welcome_shown");
+    const shown = sessionStorage.getItem("lm_welcome_shown");
     if (shown) return false;
-    sessionStorage.setItem("kreasi_welcome_shown", "1");
+    sessionStorage.setItem("lm_welcome_shown", "1");
     return true;
   });
   const [showPromoPopup, setShowPromoPopup] = useState(false);
@@ -48,9 +43,9 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
   const [promoToast, setPromoToast] = useState<number | null>(null);
 
   useEffect(() => {
-    const shown = sessionStorage.getItem("kreasi_promo_checked");
+    const shown = sessionStorage.getItem("lm_promo_checked");
     if (shown) return;
-    sessionStorage.setItem("kreasi_promo_checked", "1");
+    sessionStorage.setItem("lm_promo_checked", "1");
     apiFetch("/api/credits/promo-status", token)
       .then(r => r.json())
       .then((d: { redeemed?: boolean }) => { if (!d.redeemed) setShowPromoPopup(true); })
@@ -87,7 +82,7 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
 
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] sticky top-0 z-20 bg-[var(--bg-primary)]/90 backdrop-blur-xl">
-        <img src="/logo.png" alt="Kreasi AI" className="h-7 object-contain" style={{ mixBlendMode: "screen" }} />
+        <img src="/logo.png" alt="Lovemelodia" className="h-7 object-contain" style={{ mixBlendMode: "screen" }} />
 
         <div className="flex items-center gap-2">
           {/* History button in navbar */}
@@ -197,33 +192,6 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
                 </motion.div>
               )}
 
-              {mode === "novel" && (
-                <motion.div key="novel" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22 }}>
-                  <NovelTab
-                    token={token}
-                    credits={credits}
-                    onCreditsUpdate={onCreditsUpdate}
-                    onTopUp={() => setCreditsModalOpen(true)}
-                  />
-                </motion.div>
-              )}
-
-              {mode === "album" && (
-                <motion.div key="album" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22 }}>
-                  <AlbumCreator
-                    token={token}
-                    credits={credits}
-                    onCreditsUpdate={onCreditsUpdate}
-                    onTopUp={() => setCreditsModalOpen(true)}
-                  />
-                </motion.div>
-              )}
-
-              {mode === "video" && (
-                <motion.div key="video" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22 }}>
-                  <ComingSoon icon="🎬" title="Musik Video" desc="Dari audio ke video sinematik penuh efek. Hasilnya bikin melongo." teaser="Music Novel harus ada dulu sebelum video dibuat" color="var(--accent-coral)" />
-                </motion.div>
-              )}
             </AnimatePresence>
           </div>
         </main>
@@ -270,9 +238,7 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
 
       {newMemberOpen && (
         <NewMemberModal
-          token={token}
           onClose={() => setNewMemberOpen(false)}
-          onPurchased={() => setNewMemberOpen(false)}
         />
       )}
 
@@ -314,7 +280,7 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
                   🎁
                 </div>
                 <div>
-                  <p className="text-white font-black text-lg leading-snug">Coba Kreasi AI gratis!</p>
+                  <p className="text-white font-black text-lg leading-snug">Coba Lovemelodia gratis!</p>
                   <p className="text-zinc-400 text-sm mt-1.5 leading-relaxed">
                     Gabung grup WhatsApp kami dan kami akan menambahkan <span className="text-violet-400 font-semibold">50 kredit gratis</span> ke akunmu.
                   </p>
@@ -366,24 +332,3 @@ export default function CreatorShell({ token, phone, credits, onCreditsUpdate }:
   );
 }
 
-function ComingSoon({ icon, title, desc, teaser, color }: {
-  icon: string; title: string; desc: string; teaser: string; color: string;
-}) {
-  return (
-    <div className="max-w-sm mx-auto text-center py-16 space-y-5">
-      <div className="text-5xl float-anim">{icon}</div>
-      <h3 className="heading-display text-xl text-[var(--text-primary)]">{title}</h3>
-      <p className="text-sm text-[var(--text-muted)] leading-relaxed">{desc}</p>
-      <div className="card-elevated p-3.5 mt-2">
-        <p className="text-xs text-[var(--text-faint)]">💡 {teaser}</p>
-      </div>
-      <div
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-semibold label-caps"
-        style={{ borderColor: `${color}30`, background: `${color}08`, color }}
-      >
-        <span className="w-1.5 h-1.5 rounded-full glow-pulse" style={{ background: color }} />
-        Segera Hadir
-      </div>
-    </div>
-  );
-}

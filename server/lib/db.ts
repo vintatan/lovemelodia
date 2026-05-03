@@ -170,6 +170,21 @@ try { db.exec("ALTER TABLE novel_jobs ADD COLUMN timepoints_json TEXT"); } catch
 try { db.exec("ALTER TABLE music_jobs ADD COLUMN title TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE music_jobs ADD COLUMN lyrics TEXT"); } catch { /* already exists */ }
 
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS share_links (
+    id            TEXT PRIMARY KEY,
+    music_job_id  TEXT NOT NULL,
+    message       TEXT,
+    template_id   TEXT NOT NULL DEFAULT 'birthday',
+    image_url     TEXT,
+    video_url     TEXT,
+    print_tag_url TEXT,
+    created_at    INTEGER NOT NULL DEFAULT (unixepoch())
+  )`);
+} catch { /* already exists */ }
+try { db.exec("ALTER TABLE share_links ADD COLUMN vinyl_card_url TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE share_links ADD COLUMN vinyl_video_url TEXT"); } catch { /* already exists */ }
+
 // ── Prepared statements ───────────────────────────────────────────────────────
 
 const stmts = {
@@ -179,6 +194,7 @@ const stmts = {
   deductCredits:       db.prepare("UPDATE users SET credits = credits - ? WHERE phone = ? AND credits >= ?"),
   addCredits:          db.prepare("UPDATE users SET credits = credits + ? WHERE phone = ?"),
   hasRedeemedPromo:    db.prepare("SELECT 1 FROM redeemed_promos WHERE phone = ? AND code = ?"),
+  hasAnyTransaction:   db.prepare("SELECT 1 FROM transactions WHERE phone = ? LIMIT 1"),
   insertRedeemedPromo: db.prepare("INSERT INTO redeemed_promos (phone, code) VALUES (?, ?)"),
   insertTx:            db.prepare("INSERT INTO transactions (id, phone, external_id, link_id, package_name, credits, amount, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"),
   getTxByExtId:        db.prepare("SELECT * FROM transactions WHERE external_id = ?"),
@@ -234,6 +250,11 @@ const stmts = {
   getNovelJobsByPhone:   db.prepare("SELECT * FROM novel_jobs WHERE phone = ? ORDER BY created_at DESC LIMIT 20"),
   getLatestNovelJobWithImages: db.prepare("SELECT * FROM novel_jobs WHERE music_job_id = ? AND phone = ? AND image_urls_json IS NOT NULL AND status IN ('awaiting_approval','assembling','uploading','completed') ORDER BY created_at DESC LIMIT 1"),
   getNovelSummariesForPhone:  db.prepare("SELECT id, music_job_id, status, image_urls_json, video_url FROM novel_jobs WHERE phone = ? AND image_urls_json IS NOT NULL GROUP BY music_job_id HAVING created_at = MAX(created_at)"),
+
+  insertShareLink:       db.prepare("INSERT INTO share_links (id, music_job_id, message, template_id, image_url, video_url, print_tag_url) VALUES (?, ?, ?, ?, ?, ?, ?)"),
+  getShareLink:          db.prepare("SELECT * FROM share_links WHERE id = ?"),
+  updateShareLink:       db.prepare("UPDATE share_links SET image_url = ?, video_url = ?, print_tag_url = ? WHERE id = ?"),
+  updateShareLinkVinyl:  db.prepare("UPDATE share_links SET vinyl_card_url = ?, vinyl_video_url = ? WHERE id = ?"),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -320,6 +341,10 @@ export async function addCreditsAsync(phone: string, amount: number, type: "topu
 
 export function hasRedeemedPromo(phone: string, code: string): boolean {
   return !!stmts.hasRedeemedPromo.get(phone, code);
+}
+
+export function hasAnyTransaction(phone: string): boolean {
+  return !!stmts.hasAnyTransaction.get(phone);
 }
 
 export async function redeemFreePromo(phone: string, code: string, credits: number): Promise<{ success: boolean; reason?: string }> {
@@ -811,6 +836,37 @@ export function updateAlbumNovelJob(
   error?: string | null,
 ): void {
   stmts.updateAlbumNovelJob.run(status, songsDone ?? null, finalVideoUrl ?? null, error ?? null, id);
+}
+
+// ── Share links ───────────────────────────────────────────────────────────────
+
+export interface ShareLink {
+  id: string;
+  music_job_id: string;
+  message: string | null;
+  template_id: string;
+  image_url: string | null;
+  video_url: string | null;
+  print_tag_url: string | null;
+  vinyl_card_url: string | null;
+  vinyl_video_url: string | null;
+  created_at: number;
+}
+
+export function createShareLink(id: string, musicJobId: string, message: string, templateId: string): void {
+  stmts.insertShareLink.run(id, musicJobId, message, templateId, null, null, null);
+}
+
+export function getShareLink(id: string): ShareLink | undefined {
+  return stmts.getShareLink.get(id) as ShareLink | undefined;
+}
+
+export function updateShareLinkAssets(id: string, imageUrl: string | null, videoUrl: string | null, printTagUrl: string | null): void {
+  stmts.updateShareLink.run(imageUrl, videoUrl, printTagUrl, id);
+}
+
+export function updateVinylAssets(id: string, vinylCardUrl: string | null, vinylVideoUrl: string | null): void {
+  stmts.updateShareLinkVinyl.run(vinylCardUrl, vinylVideoUrl, id);
 }
 
 export default db;

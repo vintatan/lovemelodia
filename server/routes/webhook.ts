@@ -19,8 +19,14 @@ router.post("/hitpay", async (req, res) => {
     if (!tx) return res.status(404).json({ error: "Transaction not found" });
 
     const granted = markPaidAndCredit(reference_number);
-    if (granted) trackPaymentCompleted(tx as any);
-    return res.json({ received: true });
+    if (granted) {
+      const externalId = reference_number;
+      const credits = tx.credits;
+      const phone = tx.phone;
+      console.log("[HitPay] Payment confirmed:", externalId, "→", credits, "credits for", phone);
+      trackPaymentCompleted(tx as any);
+    }
+    return res.json({ ok: true });
   } catch (err: any) {
     console.error("[Webhook] HitPay error:", err);
     return res.status(500).json({ error: "Webhook processing failed" });

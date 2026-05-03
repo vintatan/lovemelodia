@@ -1,591 +1,935 @@
-import { useRef } from "react";
-import { motion } from "motion/react";
-import ShowcaseCarousel from "./ShowcaseCarousel.tsx";
-import TopBanner from "./TopBanner.tsx";
-
-const YT_VIDEO_ID = "5gxn7Lho9yg";
-const YT_CHANNEL   = "https://www.youtube.com/@ImajiAI-z8k";
+import { useRef, useEffect, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 
 interface LandingPageProps {
   onStart: () => void;
 }
 
-function FloatingOrb({ style }: { style?: React.CSSProperties }) {
-  return <div className="absolute rounded-full pointer-events-none blur-3xl" style={style} />;
-}
+const C = {
+  burgundy:  "#9B2335",
+  burgundyLight: "#C23048",
+  roseGold:  "#C4A882",
+  amber:     "#C4844A",
+  amberLight:"#E8A86C",
+  cream:     "#FFF8F0",
+  creamDark: "#F5EDE0",
+  nearBlack: "#1A0A0E",
+  darkBg:    "#2D0A12",
+  darkMid:   "#3D1020",
+  muted:     "#8B7355",
+  mutedLight:"#A89070",
+  white:     "#FFFFFF",
+};
 
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 24 },
+// ─── Ease curves ─────────────────────────────────────────────────────────────
+const EASE_OUT = [0.25, 1, 0.5, 1] as const;
+const EASE_SPRING = [0.34, 1.56, 0.64, 1] as const;
+
+const fadeUp = (delay = 0, distance = 24) => ({
+  initial: { opacity: 0, y: distance },
   whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true },
-  transition: { duration: 0.55, delay, ease: [0.25, 1, 0.5, 1] as const },
+  viewport: { once: true, margin: "-80px" },
+  transition: { duration: 0.65, delay, ease: EASE_OUT },
 });
 
-/* Noice Indonesia — broadcast/signal mark matching their actual logo */
-function NoiceIcon({ size = 22 }: { size?: number }) {
+// ─── Grain overlay (film texture) ────────────────────────────────────────────
+function GrainOverlay({ opacity = 0.045 }: { opacity?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Outer arc */}
-      <path d="M 28 78 Q 6 50 28 22" stroke="#1a1a1a" strokeWidth="12" strokeLinecap="round" fill="none"/>
-      {/* Middle arc */}
-      <path d="M 44 67 Q 28 50 44 33" stroke="#1a1a1a" strokeWidth="11" strokeLinecap="round" fill="none"/>
-      {/* Inner dot */}
-      <circle cx="60" cy="50" r="7" fill="#1a1a1a"/>
+    <svg
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 2, mixBlendMode: "overlay" }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <filter id="grain">
+        <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+        <feColorMatrix type="saturate" values="0" />
+      </filter>
+      <rect width="100%" height="100%" filter="url(#grain)" opacity={opacity} />
     </svg>
   );
 }
 
-export default function LandingPage({ onStart }: LandingPageProps) {
-  const featuresRef = useRef<HTMLElement>(null);
+// ─── Ambient waveform ─────────────────────────────────────────────────────────
+function AmbientWaveform({ barColor = C.amber, barOpacity = 0.35, count = 48 }: {
+  barColor?: string; barOpacity?: number; count?: number;
+}) {
+  const barsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const rafRef  = useRef<number>(0);
+
+  useEffect(() => {
+    function tick() {
+      const t = Date.now() / 1000;
+      barsRef.current.forEach((bar, i) => {
+        if (!bar) return;
+        const h = (Math.sin(t * 1.2 + i * 0.35) * 0.5 + 0.5) * 40 + 6;
+        bar.style.height = `${h}px`;
+        bar.style.opacity = String(barOpacity * (0.5 + Math.sin(t + i * 0.4) * 0.5));
+      });
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [barOpacity]);
 
   return (
-    <div className="min-h-screen overflow-x-hidden" style={{ background: "var(--bg-primary)" }}>
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 48 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          ref={el => { barsRef.current[i] = el; }}
+          style={{ width: 3, minHeight: 4, borderRadius: 2, background: barColor, flexShrink: 0 }}
+        />
+      ))}
+    </div>
+  );
+}
 
-      {/* ── Top Banner ─────────────────────────────────────────── */}
-      <div className="fixed top-0 left-0 right-0 z-50">
-        <TopBanner onStart={onStart} />
+// ─── Decorative QR pattern ────────────────────────────────────────────────────
+function FakeQR({ size = 56, fg = C.nearBlack, bg = "transparent" }: { size?: number; fg?: string; bg?: string }) {
+  const cell = size / 9;
+  const pattern = [
+    1,1,1,1,1,1,1,0,1,
+    1,0,0,0,0,0,1,0,0,
+    1,0,1,1,1,0,1,0,1,
+    1,0,1,1,1,0,1,0,1,
+    1,0,1,1,1,0,1,0,0,
+    1,0,0,0,0,0,1,0,1,
+    1,1,1,1,1,1,1,0,1,
+    0,0,0,0,0,0,0,0,0,
+    1,0,1,1,0,1,0,1,1,
+  ];
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} xmlns="http://www.w3.org/2000/svg">
+      <rect width={size} height={size} fill={bg} rx={4}/>
+      {pattern.map((on, i) =>
+        on ? (
+          <rect
+            key={i}
+            x={(i % 9) * cell + 0.5}
+            y={Math.floor(i / 9) * cell + 0.5}
+            width={cell - 1}
+            height={cell - 1}
+            fill={fg}
+            rx={1}
+          />
+        ) : null
+      )}
+    </svg>
+  );
+}
 
-        {/* ── Navbar ───────────────────────────────────────────── */}
-        <nav className="border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/80 backdrop-blur-xl">
-        <div className="h-[2px] rainbow-line" />
-        <div className="flex items-center justify-between px-5 sm:px-8 lg:px-12 py-3.5 max-w-7xl mx-auto">
-          <div className="flex items-center">
-            <img src="/logo.png" alt="Kreasi AI" className="h-8 object-contain" style={{ mixBlendMode: "screen" }} />
+// ─── Gift card floating mockup (hero) ─────────────────────────────────────────
+function HeroGiftCard() {
+  const barHeights = Array.from({ length: 24 }, (_, i) => 20 + Math.sin(i * 0.9) * 60);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 40, rotate: 3 }}
+      animate={{ opacity: 1, y: 0, rotate: 3 }}
+      transition={{ duration: 1, delay: 0.5, ease: EASE_OUT }}
+      style={{ position: "relative" }}
+    >
+      {/* Glow behind the card */}
+      <div style={{
+        position: "absolute",
+        inset: -32,
+        borderRadius: 48,
+        background: `radial-gradient(ellipse at center, rgba(196,132,74,0.25) 0%, transparent 70%)`,
+        filter: "blur(24px)",
+      }} />
+
+      <div style={{
+        width: 300,
+        borderRadius: 24,
+        background: `linear-gradient(160deg, #3D1020 0%, ${C.nearBlack} 100%)`,
+        border: `1px solid rgba(196,168,130,0.2)`,
+        padding: "24px",
+        boxShadow: "0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(196,168,130,0.08) inset",
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        {/* Subtle inner glow top */}
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, height: 120,
+          background: `linear-gradient(180deg, rgba(196,132,74,0.08) 0%, transparent 100%)`,
+          pointerEvents: "none",
+        }}/>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{
+              display: "inline-flex", gap: 6, alignItems: "center",
+              padding: "4px 10px", borderRadius: 9999,
+              border: "1px solid rgba(196,168,130,0.2)",
+              background: "rgba(196,168,130,0.06)",
+              marginBottom: 10,
+            }}>
+              <span style={{ fontSize: 10, color: C.roseGold, fontWeight: 600, letterSpacing: "0.06em" }}>LOVEMELODIA</span>
+            </div>
+            <p style={{ fontFamily: "Georgia, serif", fontSize: 18, color: C.white, margin: 0, lineHeight: 1.3 }}>
+              Lagu Buat Kamu ♥
+            </p>
+            <p style={{ fontSize: 11, color: "rgba(196,168,130,0.5)", margin: "4px 0 0" }}>
+              Ulang Tahun · 2026
+            </p>
           </div>
-          <button onClick={onStart} className="btn-primary py-2 px-5 text-sm rounded-xl">
-            Mulai Gratis →
-          </button>
+          {/* Occasion emoji */}
+          <div style={{
+            width: 48, height: 48, borderRadius: 14,
+            background: `linear-gradient(135deg, rgba(155,35,53,0.6), rgba(196,132,74,0.4))`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 24,
+          }}>🎂</div>
         </div>
-        </nav>
+
+        {/* Waveform */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 40, marginBottom: 20 }}>
+          {barHeights.map((h, i) => (
+            <div key={i} style={{
+              flex: 1, height: `${h}%`,
+              background: `linear-gradient(180deg, ${C.amber}cc ${0}%, rgba(196,132,74,0.15) 100%)`,
+              borderRadius: 2,
+            }}/>
+          ))}
+        </div>
+
+        {/* Footer row */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+          <div>
+            <FakeQR size={64} fg={C.roseGold} />
+            <p style={{ fontSize: 8, color: "rgba(196,168,130,0.4)", marginTop: 4 }}>Scan untuk dengarkan</p>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            {/* Play button */}
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: `linear-gradient(135deg, ${C.amber}, ${C.burgundy})`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: `0 0 20px rgba(196,132,74,0.45)`,
+              marginBottom: 6,
+              marginLeft: "auto",
+            }}>
+              <svg width="12" height="13" viewBox="0 0 10 12" fill="white">
+                <polygon points="1,0.5 9.5,6 1,11.5"/>
+              </svg>
+            </div>
+            <p style={{ fontSize: 9, color: "rgba(255,255,255,0.2)" }}>lovemelodia.com</p>
+          </div>
+        </div>
       </div>
+    </motion.div>
+  );
+}
 
-      {/* ── Hero ───────────────────────────────────────────────── */}
-      {/* pt accounts for: banner (~36px) + navbar (~57px) = ~93px → use pt-28 */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-5 sm:px-8 pt-28 pb-16 text-center overflow-hidden">
-        <FloatingOrb style={{ width: 700, height: 700, top: 0, left: "50%", transform: "translateX(-50%)", background: "radial-gradient(circle at 50% 30%, rgba(255,45,85,0.13) 0%, transparent 65%)", animation: "float-y 7s ease-in-out infinite" }} />
-        <FloatingOrb style={{ width: 400, height: 400, top: "25%", right: "-8%", background: "radial-gradient(circle, rgba(251,146,60,0.1) 0%, transparent 70%)", animation: "float-y 9s ease-in-out infinite 2s" }} />
-        <FloatingOrb style={{ width: 300, height: 300, bottom: "18%", left: "-5%", background: "radial-gradient(circle, rgba(220,38,38,0.09) 0%, transparent 70%)", animation: "float-y 6s ease-in-out infinite 1s" }} />
+// ─── Vinyl record mockup ──────────────────────────────────────────────────────
+function VinylMockup() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      whileInView={{ opacity: 1, scale: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.7, ease: EASE_OUT }}
+      animate={{ rotate: 360 }}
+      // @ts-ignore framer motion animate+whileInView conflict workaround
+      style={{ position: "relative" }}
+    >
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+        style={{ width: 240, height: 240 }}
+      >
+        <svg width={240} height={240} viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+          {/* Outer disc */}
+          <circle cx={120} cy={120} r={118} fill="#1A1A1A"/>
+          {/* Groove rings */}
+          {[90,80,70,60,50,42,35].map(r => (
+            <circle key={r} cx={120} cy={120} r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={1.5}/>
+          ))}
+          {/* Highlight arc */}
+          <path d="M 60 50 A 80 80 0 0 1 180 90" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={4} strokeLinecap="round"/>
+          {/* Center label */}
+          <circle cx={120} cy={120} r={30} fill={C.burgundy}/>
+          <circle cx={120} cy={120} r={22} fill={C.darkMid}/>
+          {/* Center hole */}
+          <circle cx={120} cy={120} r={5} fill="#111"/>
+          {/* Label text */}
+          <text x={120} y={116} textAnchor="middle" fontSize={6} fill={C.roseGold} fontFamily="sans-serif" fontWeight="600">LOVEMELODIA</text>
+          <text x={120} y={126} textAnchor="middle" fontSize={5} fill="rgba(196,168,130,0.5)" fontFamily="sans-serif">Anniversary</text>
+        </svg>
+      </motion.div>
+    </motion.div>
+  );
+}
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="relative z-10 w-full max-w-4xl"
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.88 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.1, ease: [0.34, 1.56, 0.64, 1] }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[var(--accent-red)]/30 bg-[var(--accent-red)]/5 text-xs font-semibold label-caps mb-6"
-            style={{ color: "var(--accent-coral)" }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full glow-pulse" style={{ background: "var(--accent-red)" }} />
-            AI Music Generator #1 Indonesia ✦
-          </motion.div>
+// ─── Phone mockup ─────────────────────────────────────────────────────────────
+function PhoneMockup() {
+  return (
+    <motion.div
+      {...{
+        initial: { opacity: 0, y: 20 },
+        whileInView: { opacity: 1, y: 0 },
+        viewport: { once: true },
+        transition: { duration: 0.7, ease: EASE_OUT },
+      }}
+      style={{
+        width: 200, height: 360,
+        borderRadius: 36,
+        border: `2.5px solid rgba(196,168,130,0.25)`,
+        background: C.nearBlack,
+        padding: "14px 10px 10px",
+        boxShadow: "0 32px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(196,168,130,0.05) inset",
+        display: "flex", flexDirection: "column", gap: 8,
+        flexShrink: 0,
+      }}
+    >
+      {/* Notch */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: -4 }}>
+        <div style={{ width: 60, height: 8, borderRadius: 9999, background: "rgba(255,255,255,0.06)" }}/>
+      </div>
+      {/* Status bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "0 4px" }}>
+        <span style={{ fontSize: 8, color: "rgba(255,255,255,0.3)" }}>9:41</span>
+        <span style={{ fontSize: 8, color: "rgba(255,255,255,0.3)" }}>▲▲▲ WiFi ■</span>
+      </div>
+      {/* URL bar */}
+      <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: "5px 10px", display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#4CAF50" }}/>
+        <p style={{ fontSize: 7.5, color: "rgba(196,168,130,0.5)", fontFamily: "monospace", margin: 0 }}>lovemelodia.com/gift/…</p>
+      </div>
+      {/* Gift page preview */}
+      <div style={{
+        flex: 1, borderRadius: 14,
+        background: `linear-gradient(160deg, ${C.nearBlack}, #3D1020)`,
+        border: `1px solid rgba(196,168,130,0.15)`,
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        gap: 10, padding: 14,
+      }}>
+        <div style={{ width: 72, height: 72, borderRadius: 16, background: `linear-gradient(135deg, ${C.burgundy}, ${C.amber})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 28 }}>🌸</span>
+        </div>
+        <p style={{ fontFamily: "Georgia, serif", fontSize: 10, color: C.white, textAlign: "center", margin: 0, lineHeight: 1.5 }}>
+          Lagu dari anakmu<br/>yang selalu sayang
+        </p>
+        <p style={{ fontSize: 8, color: C.roseGold, margin: 0 }}>Untuk Ibu · 2026</p>
+        {/* Play button */}
+        <div style={{
+          width: 40, height: 40, borderRadius: "50%",
+          background: `linear-gradient(135deg, ${C.amber}, ${C.burgundy})`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: `0 0 16px rgba(196,132,74,0.4)`,
+        }}>
+          <svg width="11" height="12" viewBox="0 0 10 12" fill="white">
+            <polygon points="1,0.5 9.5,6 1,11.5"/>
+          </svg>
+        </div>
+        {/* Mini waveform */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 1.5, height: 20, width: "100%" }}>
+          {Array.from({ length: 28 }, (_, i) => (
+            <div key={i} style={{ flex: 1, height: `${25 + Math.sin(i * 0.7) * 55}%`, background: `rgba(196,132,74,${0.2 + Math.sin(i * 0.4) * 0.15})`, borderRadius: 1 }}/>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
-          <motion.div
-            initial={{ opacity: 0, y: 32 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.65, delay: 0.15, ease: [0.25, 1, 0.5, 1] }}
-          >
-            <h1
-              className="heading-display text-[var(--text-primary)] leading-[0.92]"
-              style={{ fontSize: "clamp(4rem, 14vw, 9rem)", letterSpacing: "-0.05em" }}
-            >
-              BIKIN<br />
-              MUSIK<br />
-              <span className="text-gradient-fire">PAKE AI</span>
-            </h1>
-          </motion.div>
+// ─── Bouquet illustration ─────────────────────────────────────────────────────
+function BouquetWithTag() {
+  return (
+    <div style={{ position: "relative", width: 220, height: 300, flexShrink: 0 }}>
+      {/* Glow */}
+      <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 50% 60%, rgba(196,132,74,0.15) 0%, transparent 70%)", borderRadius: "50%" }}/>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.45 }}
-            className="text-[var(--text-muted)] mt-7 mb-8 leading-relaxed max-w-lg mx-auto"
-            style={{ fontSize: "clamp(0.95rem, 2vw, 1.15rem)" }}
-          >
-            Gak perlu studio. Gak perlu instrumen.{" "}
-            <span className="text-[var(--text-primary)] font-semibold">Tulis vibe lo, lagu beneran jadi dalam menit.</span>
-          </motion.p>
+      <svg width={220} height={260} viewBox="0 0 220 260" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ position: "absolute", top: 0, left: 0 }}>
+        {/* Wrap ribbon */}
+        <path d="M 60 220 Q 110 200 160 220" stroke={C.burgundy} strokeWidth={3} fill="none" opacity={0.6}/>
+        {/* Stems */}
+        <path d="M110 210 Q105 170 90 138" stroke="#5A8A40" strokeWidth={3} strokeLinecap="round"/>
+        <path d="M110 210 Q115 165 132 132" stroke="#5A8A40" strokeWidth={3} strokeLinecap="round"/>
+        <path d="M110 210 Q110 168 110 125" stroke="#5A8A40" strokeWidth={3.5} strokeLinecap="round"/>
+        <path d="M110 210 Q98 172 78 150" stroke="#4A7A30" strokeWidth={2.5} strokeLinecap="round"/>
+        <path d="M110 210 Q122 170 142 148" stroke="#4A7A30" strokeWidth={2.5} strokeLinecap="round"/>
+        {/* Leaves */}
+        <path d="M95 173 Q80 162 87 148 Q102 155 95 173Z" fill="#6A9A50" opacity={0.8}/>
+        <path d="M127 167 Q142 156 135 142 Q120 149 127 167Z" fill="#6A9A50" opacity={0.8}/>
+        {/* Center flower — rose */}
+        {[0,72,144,216,288].map((deg, i) => (
+          <ellipse key={i}
+            cx={110 + 20 * Math.cos(deg * Math.PI / 180)}
+            cy={118 + 20 * Math.sin(deg * Math.PI / 180)}
+            rx={11} ry={16}
+            fill={i % 2 === 0 ? "#F4A0A0" : "#E87878"}
+            transform={`rotate(${deg}, ${110 + 20 * Math.cos(deg * Math.PI / 180)}, ${118 + 20 * Math.sin(deg * Math.PI / 180)})`}
+            opacity={0.92}
+          />
+        ))}
+        <circle cx={110} cy={118} r={13} fill="#F59E4A"/>
+        <circle cx={110} cy={118} r={7} fill="#E57A20"/>
+        {/* Left flower — pink */}
+        {[0,72,144,216,288].map((deg, i) => (
+          <ellipse key={i}
+            cx={74 + 15 * Math.cos(deg * Math.PI / 180)}
+            cy={138 + 15 * Math.sin(deg * Math.PI / 180)}
+            rx={8} ry={12}
+            fill={i % 2 === 0 ? "#F4B0C8" : "#E890A8"}
+            transform={`rotate(${deg}, ${74 + 15 * Math.cos(deg * Math.PI / 180)}, ${138 + 15 * Math.sin(deg * Math.PI / 180)})`}
+            opacity={0.88}
+          />
+        ))}
+        <circle cx={74} cy={138} r={9} fill="#F5C842"/>
+        <circle cx={74} cy={138} r={4.5} fill="#E5A820"/>
+        {/* Right flower — rose gold */}
+        {[0,72,144,216,288].map((deg, i) => (
+          <ellipse key={i}
+            cx={146 + 13 * Math.cos(deg * Math.PI / 180)}
+            cy={130 + 13 * Math.sin(deg * Math.PI / 180)}
+            rx={7} ry={11}
+            fill={i % 2 === 0 ? "#C4A882" : "#A88862"}
+            transform={`rotate(${deg}, ${146 + 13 * Math.cos(deg * Math.PI / 180)}, ${130 + 13 * Math.sin(deg * Math.PI / 180)})`}
+            opacity={0.9}
+          />
+        ))}
+        <circle cx={146} cy={130} r={7} fill="#E57A20"/>
+        {/* Wrap */}
+        <ellipse cx={110} cy={218} rx={52} ry={12} fill={C.cream} opacity={0.9}/>
+        <path d="M 58 218 Q 110 225 162 218 L 162 235 Q 110 242 58 235 Z" fill={C.cream} opacity={0.85}/>
+        <path d="M 58 218 Q 110 225 162 218" stroke={C.roseGold} strokeWidth={1.5} fill="none" opacity={0.6}/>
+      </svg>
 
+      {/* QR gift tag */}
+      <div style={{
+        position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
+        width: 76, padding: "8px 8px 6px",
+        background: C.cream, border: `1.5px solid ${C.burgundy}`,
+        borderRadius: 6, textAlign: "center",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+      }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", border: `1.5px solid ${C.burgundy}`, margin: "0 auto 5px" }}/>
+        <FakeQR size={44} fg={C.burgundy} bg={C.cream}/>
+        <p style={{ fontSize: 7, color: C.muted, marginTop: 3, lineHeight: 1.4 }}>Scan untuk<br/>dengerin 🎵</p>
+      </div>
+      {/* String */}
+      <svg style={{ position: "absolute", bottom: 62, left: "50%", transform: "translateX(-50%)" }} width={2} height={28}>
+        <line x1={1} y1={0} x2={1} y2={28} stroke={C.roseGold} strokeWidth={1.2} strokeDasharray="3,2"/>
+      </svg>
+    </div>
+  );
+}
+
+// ─── Section 1 : Hero ─────────────────────────────────────────────────────────
+function HeroSection({ onStart }: { onStart: () => void }) {
+  return (
+    <section style={{
+      minHeight: "100vh",
+      display: "flex",
+      alignItems: "center",
+      padding: "80px 24px 64px",
+      position: "relative",
+      overflow: "hidden",
+      background: `radial-gradient(ellipse 120% 100% at 40% 50%, ${C.darkBg} 0%, ${C.nearBlack} 55%)`,
+    }}>
+      {/* Deep amber underglow */}
+      <div style={{
+        position: "absolute", bottom: -80, left: "50%", transform: "translateX(-50%)",
+        width: "80%", height: 400,
+        background: `radial-gradient(ellipse at center, rgba(196,132,74,0.12) 0%, transparent 70%)`,
+        pointerEvents: "none",
+      }}/>
+      {/* Burgundy left glow */}
+      <div style={{
+        position: "absolute", top: "20%", left: -80, width: 400, height: 400,
+        background: `radial-gradient(ellipse at center, rgba(155,35,53,0.15) 0%, transparent 70%)`,
+        pointerEvents: "none",
+      }}/>
+
+      <GrainOverlay opacity={0.05} />
+
+      <div style={{
+        maxWidth: 1200, margin: "0 auto", width: "100%",
+        display: "flex", alignItems: "center", gap: 64,
+        flexWrap: "wrap", justifyContent: "center",
+      }}>
+        {/* Left: text */}
+        <div style={{ flex: "1 1 380px", maxWidth: 560, position: "relative", zIndex: 3 }}>
+          {/* Badge */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.55, ease: [0.34, 1.56, 0.64, 1] }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8"
+            transition={{ duration: 0.5, delay: 0.1 }}
+            style={{
+              display: "inline-flex", gap: 6, alignItems: "center",
+              padding: "6px 16px", borderRadius: 9999,
+              border: `1px solid rgba(196,168,130,0.3)`,
+              background: "rgba(196,168,130,0.07)",
+              color: C.roseGold, fontSize: 12, fontWeight: 600,
+              letterSpacing: "0.04em", marginBottom: 28,
+            }}
           >
-            <button onClick={onStart} className="btn-primary text-base px-9 py-4 rounded-2xl w-full sm:w-auto">
-              Gas Bikin Musik 🎵
-            </button>
-            <button
-              onClick={() => featuresRef.current?.scrollIntoView({ behavior: "smooth" })}
-              className="px-7 py-4 rounded-2xl border border-[var(--border-subtle)] text-[var(--text-muted)] text-sm font-medium hover:border-[var(--accent-red)]/30 hover:text-[var(--text-primary)] transition-all duration-200 w-full sm:w-auto"
-            >
-              Lihat Karya ↓
-            </button>
+            ✦ Bikin Musik untuk yang Kau Sayang
           </motion.div>
 
-          <motion.div
+          {/* Headline */}
+          <h1 style={{
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            color: C.white, lineHeight: 1.08, margin: "0 0 24px",
+          }}>
+            <motion.span
+              initial={{ opacity: 0, y: 32 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.75, delay: 0.2, ease: EASE_OUT }}
+              style={{ display: "block", fontSize: "clamp(2.8rem, 8vw, 5.2rem)", letterSpacing: "-0.02em" }}
+            >
+              Ada lagu yang
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0, y: 32 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.75, delay: 0.38, ease: EASE_OUT }}
+              style={{
+                display: "block",
+                fontSize: "clamp(2.8rem, 8vw, 5.2rem)",
+                letterSpacing: "-0.02em",
+                background: `linear-gradient(90deg, ${C.white} 0%, ${C.roseGold} 100%)`,
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              cuma buat kamu.
+            </motion.span>
+          </h1>
+
+          {/* Sub */}
+          <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.75 }}
-            className="flex flex-wrap items-center justify-center gap-2"
+            transition={{ duration: 0.6, delay: 0.6 }}
+            style={{
+              color: "rgba(196,168,130,0.8)", fontSize: "clamp(1rem, 2.2vw, 1.15rem)",
+              lineHeight: 1.65, margin: "0 0 40px",
+            }}
           >
-            {["✓ Langsung jadi", "✓ Tanpa studio", "✓ Musik AI original"].map(t => (
-              <span key={t} className="text-xs text-[var(--text-faint)] px-3 py-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)]">{t}</span>
-            ))}
-          </motion.div>
-        </motion.div>
+            Hadiah yang didengar, bukan hanya dilihat.<br/>
+            Pilih momennya — AI bikinkan lagunya.
+          </motion.p>
 
-        {/* Waveform decoration */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="relative z-10 flex items-end justify-center gap-px mt-16 w-full max-w-4xl"
-          style={{ height: 44 }}
-        >
-          {Array.from({ length: 80 }, (_, i) => (
-            <div
-              key={i}
-              className="flex-1 rounded-full waveform-bar"
+          {/* CTAs */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.75, ease: EASE_SPRING }}
+            style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 360 }}
+          >
+            <button
+              onClick={onStart}
               style={{
-                height: `${16 + Math.sin(i * 0.38) * 14 + Math.cos(i * 0.62) * 8}%`,
-                background: `hsl(${350 - i * 1.3}, 88%, ${52 + Math.sin(i * 0.45) * 11}%)`,
-                opacity: 0.35,
-                animationDelay: `${i * 0.025}s`,
+                background: `linear-gradient(135deg, ${C.amber} 0%, ${C.burgundy} 100%)`,
+                color: C.white, fontSize: 17, fontWeight: 700,
+                padding: "17px 36px", borderRadius: 9999,
+                border: "none", cursor: "pointer", width: "100%",
+                boxShadow: `0 6px 32px rgba(155,35,53,0.5), 0 2px 8px rgba(196,132,74,0.25)`,
+                transition: "transform 0.15s, box-shadow 0.15s",
+                letterSpacing: "0.01em",
               }}
-            />
-          ))}
-        </motion.div>
-      </section>
-
-      <div className="section-rule mx-5 sm:mx-8 lg:mx-12" />
-
-      {/* ── YouTube ─────────────────────────────────────────────── */}
-      <section className="px-5 sm:px-8 lg:px-12 py-20 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          <motion.div {...fadeUp(0)}>
-            <p className="label-caps mb-2" style={{ color: "var(--accent-amber)" }}>Karya Terbaru</p>
-            <h2 className="heading-display text-[var(--text-primary)]" style={{ fontSize: "clamp(2.4rem, 5vw, 4rem)", letterSpacing: "-0.04em" }}>
-              Ini yang Udah<br />Dibikin. ✨
-            </h2>
-            <p className="text-sm text-[var(--text-muted)] mt-4 leading-relaxed max-w-sm">
-              Bukti nyata AI bisa bikin musik yang beneran bagus. Dengerin sendiri, judging boleh.
-            </p>
-            <a
-              href={YT_CHANNEL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 mt-6 px-5 py-3 rounded-xl text-sm font-semibold transition-all hover:scale-105 active:scale-95"
-              style={{ background: "rgba(255,0,0,0.1)", color: "#ff4444", border: "1px solid rgba(255,0,0,0.2)" }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.transform = "scale(1.03) translateY(-1px)";
+                el.style.boxShadow = `0 10px 40px rgba(155,35,53,0.6), 0 2px 10px rgba(196,132,74,0.3)`;
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.transform = "scale(1)";
+                el.style.boxShadow = `0 6px 32px rgba(155,35,53,0.5), 0 2px 8px rgba(196,132,74,0.25)`;
+              }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21.582 7.2s-.21-1.47-.85-2.12c-.81-.85-1.72-.85-2.13-.9C15.97 4 12 4 12 4s-3.97 0-6.6.18c-.41.05-1.32.05-2.13.9-.64.65-.85 2.12-.85 2.12S2.2 8.9 2.2 10.6v1.6c0 1.7.22 3.4.22 3.4s.21 1.47.85 2.12c.81.85 1.88.82 2.35.91C7 18.8 12 18.8 12 18.8s3.97 0 6.6-.18c.41-.05 1.32-.06 2.13-.91.64-.65.85-2.12.85-2.12s.22-1.7.22-3.4v-1.6c0-1.7-.22-3.4-.22-3.4zM9.74 14.85V8.66l5.76 3.1-5.76 3.09z"/>
-              </svg>
-              Tonton Lebih Banyak di YouTube
+              Bikin Lagu untuk Dia →
+            </button>
+
+            <a
+              href="#stories"
+              style={{ color: "rgba(196,168,130,0.65)", fontSize: 14, textDecoration: "none", textAlign: "center", transition: "color 0.15s" }}
+              onClick={e => { e.preventDefault(); document.getElementById("stories")?.scrollIntoView({ behavior: "smooth" }); }}
+              onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.color = C.roseGold}
+              onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.color = "rgba(196,168,130,0.65)"}
+            >
+              Lihat contoh hadiah ↓
             </a>
           </motion.div>
 
+          {/* Social proof */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.55, delay: 0.1, ease: [0.25, 1, 0.5, 1] }}
-            className="card-glass overflow-hidden"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 1.1 }}
+            style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 32 }}
           >
-            <div className="h-[2px] rainbow-line" />
-            <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-              <iframe
-                src={`https://www.youtube.com/embed/${YT_VIDEO_ID}?rel=0&modestbranding=1`}
-                title="Kreasi AI — Karya Terbaru"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                loading="lazy"
-                className="absolute inset-0 w-full h-full"
-              />
-            </div>
-            <div className="p-4 border-t border-[var(--border-subtle)]">
-              <p className="font-semibold text-[var(--text-primary)] text-sm">Imaji AI</p>
-              <p className="text-xs text-[var(--text-muted)]">Musik AI original Indonesia</p>
-            </div>
+            {["✓ Tanpa studio", "✓ Langsung jadi", "✓ Bisa dicetak"].map(t => (
+              <span key={t} style={{
+                fontSize: 11, color: "rgba(196,168,130,0.55)",
+                padding: "4px 12px", borderRadius: 9999,
+                border: "1px solid rgba(196,168,130,0.15)",
+              }}>{t}</span>
+            ))}
           </motion.div>
-        </div>
-      </section>
 
-      <div className="section-rule mx-5 sm:mx-8 lg:mx-12" />
-
-      {/* ── Showcase Carousel ───────────────────────────────────── */}
-      <section className="py-16 max-w-7xl mx-auto overflow-hidden">
-        <motion.div
-          {...fadeUp(0)}
-          className="flex items-end justify-between px-5 sm:px-8 lg:px-12 mb-8"
-        >
-          <div>
-            <p className="label-caps mb-2" style={{ color: "var(--accent-red)" }}>Karya Komunitas</p>
-            <h2 className="heading-display text-[var(--text-primary)]" style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)", letterSpacing: "-0.04em" }}>
-              Dibikin Sama<br className="sm:hidden" /> Lo Semua. 🔥
-            </h2>
+          {/* Waveform */}
+          <div style={{ marginTop: 36 }}>
+            <AmbientWaveform barColor={C.amber} barOpacity={0.5} count={40} />
           </div>
-          <p className="text-xs text-[var(--text-faint)] hidden sm:block text-right leading-relaxed">
-            Hover video untuk preview<br />Tap audio untuk dengerin
+        </div>
+
+        {/* Right: floating gift card */}
+        <div style={{ flex: "0 0 auto", display: "flex", justifyContent: "center", position: "relative", zIndex: 3 }}>
+          <HeroGiftCard />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Section 2 : How It Works ─────────────────────────────────────────────────
+function HowItWorksSection() {
+  const steps = [
+    { num: "01", emoji: "🎵", title: "Pilih momen", desc: "Birthday, Mother's Day, Lebaran, Anniversary, atau sesederhana rasa sayang." },
+    { num: "02", emoji: "✨", title: "Ceritakan kisahmu", desc: "Bot kami tanya hal-hal kecil yang bermakna — jawaban kamu jadi liriknya." },
+    { num: "03", emoji: "🎁", title: "Kirimkan lagunya", desc: "Share link lewat WA, atau cetak QR card dan selipkan di bouquet." },
+  ];
+
+  return (
+    <section style={{ background: C.cream, padding: "96px 24px", position: "relative" }}>
+      {/* Subtle top border gradient */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${C.burgundy}40, transparent)` }}/>
+
+      <div style={{ maxWidth: 960, margin: "0 auto" }}>
+        <motion.div {...fadeUp(0)} style={{ textAlign: "center", marginBottom: 64 }}>
+          <p style={{ fontSize: 12, letterSpacing: "0.14em", color: C.burgundy, fontWeight: 700, marginBottom: 12, textTransform: "uppercase" }}>
+            Cara kerjanya
           </p>
+          <h2 style={{ fontFamily: "Georgia, serif", fontSize: "clamp(2rem, 5vw, 3rem)", color: C.nearBlack, margin: 0, lineHeight: 1.2 }}>
+            Semudah tiga langkah
+          </h2>
         </motion.div>
 
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 28 }}>
+          {steps.map(({ num, emoji, title, desc }, i) => (
+            <motion.div key={num} {...fadeUp(i * 0.1)}
+              style={{
+                background: C.white, borderRadius: 20, padding: "32px 28px",
+                boxShadow: "0 4px 24px rgba(155,35,53,0.06), 0 1px 4px rgba(155,35,53,0.04)",
+                border: `1px solid rgba(155,35,53,0.07)`,
+                position: "relative", overflow: "hidden",
+              }}
+            >
+              {/* Subtle corner glow */}
+              <div style={{ position: "absolute", top: -24, right: -24, width: 80, height: 80, borderRadius: "50%", background: `rgba(196,132,74,0.06)` }}/>
+              <div style={{
+                width: 44, height: 44, borderRadius: "50%",
+                background: `linear-gradient(135deg, ${C.burgundy}, ${C.darkMid})`,
+                color: C.white, display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, fontWeight: 700, marginBottom: 20, letterSpacing: "0.04em",
+                boxShadow: `0 4px 12px rgba(155,35,53,0.3)`,
+              }}>
+                {num}
+              </div>
+              <p style={{ fontSize: 30, margin: "0 0 12px" }}>{emoji}</p>
+              <h3 style={{ fontFamily: "Georgia, serif", fontSize: 21, color: C.nearBlack, margin: "0 0 10px" }}>
+                {title}
+              </h3>
+              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.7, margin: 0 }}>{desc}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Section 3 : Human Stories ───────────────────────────────────────────────
+interface StoryProps {
+  headline: string; body: string;
+  bg: string; textColor: string; bodyColor: string;
+  visual: React.ReactNode; flip?: boolean;
+  accent?: string;
+}
+
+function StoryVignette({ headline, body, bg, textColor, bodyColor, visual, flip, accent }: StoryProps) {
+  return (
+    <motion.section
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true, margin: "-120px" }}
+      transition={{ duration: 0.5 }}
+      style={{ background: bg, padding: "80px 24px", position: "relative", overflow: "hidden" }}
+    >
+      {accent && (
+        <div style={{
+          position: "absolute", bottom: -60, right: flip ? "auto" : -60, left: flip ? -60 : "auto",
+          width: 300, height: 300, borderRadius: "50%",
+          background: `radial-gradient(ellipse at center, ${accent} 0%, transparent 70%)`,
+          pointerEvents: "none",
+        }}/>
+      )}
+      <div style={{
+        maxWidth: 1024, margin: "0 auto",
+        display: "flex",
+        flexDirection: flip ? "row-reverse" : "row",
+        alignItems: "center", gap: 56,
+        flexWrap: "wrap", justifyContent: "center",
+      }}>
         <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
+          initial={{ opacity: 0, x: flip ? 32 : -32 }}
+          whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.4, delay: 0.1 }}
+          transition={{ duration: 0.7, ease: EASE_OUT, delay: 0.1 }}
+          style={{ flex: "1 1 320px", maxWidth: 500 }}
         >
-          <ShowcaseCarousel />
-        </motion.div>
-      </section>
-
-      <div className="section-rule mx-5 sm:mx-8 lg:mx-12" />
-
-      {/* ── How it works ───────────────────────────────────────── */}
-      <section className="px-5 sm:px-8 lg:px-12 py-20 max-w-7xl mx-auto">
-        <motion.div {...fadeUp(0)} className="mb-12">
-          <p className="label-caps mb-2" style={{ color: "var(--accent-red)" }}>Gimana Caranya?</p>
-          <h2 className="heading-display text-[var(--text-primary)]" style={{ fontSize: "clamp(2.4rem, 6vw, 4.5rem)", letterSpacing: "-0.04em" }}>
-            3 Langkah<br className="sm:hidden" /> Doang.
+          <h2 style={{
+            fontFamily: "Georgia, serif",
+            fontSize: "clamp(1.7rem, 4vw, 2.5rem)",
+            color: textColor, lineHeight: 1.2, margin: "0 0 18px",
+          }}>
+            {headline}
           </h2>
+          <p style={{ fontSize: 16, color: bodyColor, lineHeight: 1.8, margin: 0 }}>{body}</p>
         </motion.div>
 
-        {/* Desktop: 3-col cards */}
-        <div className="hidden md:grid md:grid-cols-3 gap-6">
-          {[
-            { n: "01", emoji: "✍️", title: "Tulis Vibe",  desc: "Deskripsiin mood, genre, atau nuansa yang lo mau. Makin spesifik makin gokil hasilnya." },
-            { n: "02", emoji: "🤖", title: "AI Garap",    desc: "AI bikin lagunya dalam 1–2 menit. Lo tinggal tunggu sambil ngemil." },
-            { n: "03", emoji: "🚀", title: "Gas Share",   desc: "Download lagunya dan share ke mana aja — TikTok, Reels, YouTube, ke siapa aja." },
-          ].map(({ n, emoji, title, desc }, i) => (
-            <motion.div key={n} {...fadeUp(i * 0.12)} className="card-elevated p-7 space-y-4">
-              <div className="num-editorial" style={{ fontSize: "clamp(3rem, 4vw, 4.5rem)" }}>{n}</div>
-              <div>
-                <p className="font-bold text-[var(--text-primary)] text-lg mb-2">{emoji} {title}</p>
-                <p className="text-sm text-[var(--text-muted)] leading-relaxed">{desc}</p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Mobile: editorial rows */}
-        <div className="md:hidden divide-y divide-[var(--border-subtle)]">
-          {[
-            { n: "01", emoji: "✍️", title: "Tulis Vibe",  desc: "Deskripsiin mood, genre, atau nuansa yang lo mau. Makin spesifik makin gokil hasilnya." },
-            { n: "02", emoji: "🤖", title: "AI Garap",    desc: "AI bikin lagunya dalam 1–2 menit. Lo tinggal tunggu sambil ngemil." },
-            { n: "03", emoji: "🚀", title: "Gas Share",   desc: "Download lagunya dan share ke mana aja — TikTok, Reels, YouTube, ke siapa aja." },
-          ].map(({ n, emoji, title, desc }, i) => (
-            <motion.div key={n} {...fadeUp(i * 0.14)} className="flex items-start gap-4 py-7">
-              <div className="num-editorial flex-shrink-0 leading-none" style={{ fontSize: "clamp(3.5rem, 10vw, 5.5rem)", minWidth: "4.5rem" }}>{n}</div>
-              <div className="pt-1">
-                <p className="font-bold text-[var(--text-primary)] text-base mb-1">{emoji} {title}</p>
-                <p className="text-sm text-[var(--text-muted)] leading-relaxed">{desc}</p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      <div className="section-rule mx-5 sm:mx-8 lg:mx-12" />
-
-      {/* ── 3 Modes ────────────────────────────────────────────── */}
-      <section ref={featuresRef} className="px-5 sm:px-8 lg:px-12 py-20 max-w-7xl mx-auto">
-        <motion.div {...fadeUp(0)} className="mb-12">
-          <p className="label-caps mb-2" style={{ color: "var(--accent-coral)" }}>Fitur</p>
-          <h2 className="heading-display text-[var(--text-primary)]" style={{ fontSize: "clamp(2.4rem, 6vw, 4.5rem)", letterSpacing: "-0.04em" }}>
-            Tiga Cara<br />Berkreasi.
-          </h2>
-          <p className="text-[var(--text-muted)] text-sm mt-3">Dari lagu doang sampai musik video penuh</p>
+        <motion.div
+          initial={{ opacity: 0, x: flip ? -32 : 32 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7, ease: EASE_OUT, delay: 0.2 }}
+          style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          {visual}
         </motion.div>
+      </div>
+    </motion.section>
+  );
+}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+function StoryPhoto({ src, alt }: { src: string; alt: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96 }}
+      whileInView={{ opacity: 1, scale: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.8, ease: EASE_OUT }}
+      style={{
+        width: 320, height: 380, borderRadius: 20, overflow: "hidden", flexShrink: 0,
+        boxShadow: "0 24px 64px rgba(0,0,0,0.35)",
+      }}
+    >
+      <img
+        src={src} alt={alt}
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
+    </motion.div>
+  );
+}
 
-          {/* ── Card 1: Musik LIVE ── */}
-          <motion.div {...fadeUp(0.05)} className="relative overflow-hidden rounded-2xl flex flex-col" style={{ padding: 0, background: "linear-gradient(160deg, rgba(255,45,85,0.13) 0%, rgba(220,38,38,0.06) 100%)", border: "1px solid rgba(255,45,85,0.25)" }}>
-            {/* Animated waveform header */}
-            <div className="flex items-end gap-px h-16 px-6 pt-5">
-              {Array.from({ length: 44 }, (_, i) => (
-                <div key={i} className="flex-1 rounded-full waveform-bar"
-                  style={{
-                    height: `${28 + Math.sin(i * 0.6) * 20 + Math.cos(i * 0.3) * 10}%`,
-                    background: `rgba(255,45,85,${0.25 + Math.sin(i * 0.4) * 0.2})`,
-                    animationDelay: `${i * 0.045}s`,
-                  }}
-                />
-              ))}
-            </div>
-            <div className="px-6 pb-7 pt-5 flex gap-4 items-start flex-1">
-              <div className="w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-glow" style={{ background: "linear-gradient(135deg, #ff2d55, #dc2626)", boxShadow: "0 0 24px rgba(255,45,85,0.5)" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-                  <path d="M9 18V5l12-2v13M6 21a3 3 0 100-6 3 3 0 000 6zm12-2a3 3 0 100-6 3 3 0 000 6z"/>
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2.5">
-                  <h3 className="heading-section text-xl text-[var(--text-primary)]">Musik</h3>
-                  <span className="label-caps px-2 py-0.5 rounded-full text-white text-[9px] glow-pulse" style={{ background: "linear-gradient(90deg, #ff2d55, #dc2626)" }}>LIVE</span>
-                </div>
-                <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-5">
-                  Tulis vibenya, AI yang bikin lagunya. Dari pop sampe gamelan modern — semua bisa. Gas langsung.
-                </p>
-                <button onClick={onStart} className="btn-primary text-sm py-2.5 px-5 rounded-xl w-full sm:w-auto">
-                  Coba Sekarang — Gratis →
-                </button>
-              </div>
-            </div>
-          </motion.div>
+function StoriesSection() {
+  return (
+    <div id="stories">
+      <StoryVignette
+        headline="Ibumu membuka link-nya di depan bunga."
+        body="Musik mengalun. Dia tidak menyangka ada lagu yang kamu buat khusus buat dia — dari ingatan kecil yang kamu ceritakan."
+        bg={`linear-gradient(160deg, #FFF2E0 0%, ${C.cream} 100%)`}
+        textColor={C.burgundy}
+        bodyColor={C.muted}
+        accent="rgba(196,132,74,0.1)"
+        visual={<StoryPhoto src="/stories/story-1.jpg" alt="Woman receiving flowers at golden hour" />}
+      />
+      <StoryVignette
+        headline='"Ini buat kamu sebelum kamu pergi."'
+        body="Gift card digital — kirim lewat WA, dibuka kapan saja. Lagunya tetap ada, bahkan setelah jarak memisahkan."
+        bg={`linear-gradient(160deg, ${C.nearBlack} 0%, ${C.darkMid} 100%)`}
+        textColor={C.white}
+        bodyColor={`rgba(196,168,130,0.7)`}
+        accent="rgba(155,35,53,0.15)"
+        visual={<StoryPhoto src="/stories/story-2.jpg" alt="Friends sharing a music gift" />}
+        flip
+      />
+      <StoryVignette
+        headline="Bukan bunga lagi. Sebuah lagu."
+        body="Cetak vinyl card-nya, selipkan di antara mawar. Scan QR-nya untuk dengarkan — hadiah yang bisa diputar ulang selamanya."
+        bg={`linear-gradient(160deg, #1A0A0E 0%, #2D0A12 100%)`}
+        textColor={C.roseGold}
+        bodyColor="rgba(196,168,130,0.7)"
+        accent="rgba(196,132,74,0.08)"
+        visual={<StoryPhoto src="/stories/story-3.jpg" alt="Vinyl record on romantic candlelit table" />}
+      />
+      <StoryVignette
+        headline="Dari jauh, tapi terasa dekat."
+        body="Kirim link saja. Tidak perlu install apa-apa. Cukup buka, dan dengarkan lagu yang dibuat khusus buat dia."
+        bg={`linear-gradient(160deg, #FFF2E0 0%, ${C.cream} 100%)`}
+        textColor={C.nearBlack}
+        bodyColor={C.muted}
+        accent="rgba(196,168,130,0.06)"
+        visual={<StoryPhoto src="/stories/story-4.jpg" alt="Grandmother joyfully reading a music gift message" />}
+        flip
+      />
+    </div>
+  );
+}
 
-          {/* ── Card 2: Musik Novel — NOW LIVE ── */}
-          <motion.div {...fadeUp(0.14)} className="relative overflow-hidden rounded-2xl flex flex-col" style={{ background: "linear-gradient(160deg, rgba(245,158,11,0.14) 0%, rgba(217,119,6,0.06) 100%)", border: "1px solid rgba(245,158,11,0.3)" }}>
-            {/* Storyboard mini frames decoration */}
-            <div className="px-6 pt-5 pb-2 flex gap-2">
-              {[
-                { from: "rgba(245,158,11,0.3)", to: "rgba(217,119,6,0.15)" },
-                { from: "rgba(245,158,11,0.5)", to: "rgba(217,119,6,0.25)" },
-                { from: "rgba(245,158,11,0.3)", to: "rgba(217,119,6,0.15)" },
-              ].map((g, i) => (
-                <div key={i} className="flex-1 rounded-lg overflow-hidden relative" style={{ height: 52, background: `linear-gradient(135deg, ${g.from}, ${g.to})`, border: "1px solid rgba(245,158,11,0.2)" }}>
-                  {/* Film holes top */}
-                  <div className="absolute top-1 left-0 right-0 flex justify-around px-1">
-                    {[0,1].map(j => <div key={j} className="w-1.5 h-1.5 rounded-sm bg-black/40" />)}
-                  </div>
-                  {/* Scene icon */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    {i === 1
-                      ? <div className="w-4 h-4 rounded-full border-2 border-amber-400/70 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-amber-400/80" /></div>
-                      : <div className="w-5 h-3 rounded-sm opacity-40" style={{ background: "rgba(245,158,11,0.6)" }} />
-                    }
-                  </div>
-                  {/* Film holes bottom */}
-                  <div className="absolute bottom-1 left-0 right-0 flex justify-around px-1">
-                    {[0,1].map(j => <div key={j} className="w-1.5 h-1.5 rounded-sm bg-black/40" />)}
-                  </div>
-                </div>
-              ))}
-            </div>
+// ─── Section 4 : Occasion Grid ───────────────────────────────────────────────
+function OccasionGrid({ onStart }: { onStart: () => void }) {
+  const [hovered, setHovered] = useState<string | null>(null);
+  const occasions = [
+    { emoji: "🎂", label: "Ulang Tahun" },
+    { emoji: "💕", label: "Untuk Kekasih" },
+    { emoji: "🌸", label: "Untuk Ibu" },
+    { emoji: "🤝", label: "Persahabatan" },
+    { emoji: "💍", label: "Anniversary" },
+    { emoji: "👨", label: "Untuk Ayah" },
+    { emoji: "🎓", label: "Wisuda" },
+    { emoji: "💒", label: "Pernikahan" },
+    { emoji: "🙏", label: "Terima Kasih" },
+    { emoji: "🌙", label: "Ramadan" },
+    { emoji: "🎄", label: "Natal" },
+    { emoji: "✨", label: "Bebas" },
+  ];
 
-            <div className="px-6 pb-7 pt-3 flex-1 flex flex-col">
-              <div className="flex items-center gap-2 mb-2.5">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.2)" }}>📖</div>
-                <h3 className="heading-section text-xl text-[var(--text-primary)]">Musik Novel</h3>
-                <span className="label-caps px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: "rgba(245,158,11,0.2)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.4)" }}>LIVE ✦</span>
-              </div>
-              <p className="text-sm text-[var(--text-muted)] leading-relaxed flex-1">
-                Musikmu jadi storyboard visual yang gokil. Setiap beat punya cerita dan gambar visualnya sendiri.
-              </p>
-              <button
-                onClick={onStart}
-                className="mt-5 text-sm py-2.5 px-5 rounded-xl w-full font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
-                style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.35)" }}
-              >
-                Coba Musik Novel →
-              </button>
-            </div>
-          </motion.div>
-
-          {/* ── Card 3: Musik Video — Coming Soon ── */}
-          <motion.div {...fadeUp(0.22)} className="relative overflow-hidden rounded-2xl flex flex-col" style={{ background: "linear-gradient(160deg, rgba(255,107,107,0.1) 0%, rgba(220,38,38,0.04) 100%)", border: "1px solid rgba(255,107,107,0.2)" }}>
-            {/* Film strip decoration */}
-            <div className="px-6 pt-5 pb-2">
-              <div className="relative w-full h-14 rounded-xl overflow-hidden" style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,107,107,0.15)" }}>
-                {/* Film strip holes */}
-                <div className="absolute inset-y-0 left-0 w-5 flex flex-col justify-around items-center py-1">
-                  {[0,1,2].map(j => <div key={j} className="w-2.5 h-2 rounded-sm bg-black/60" />)}
-                </div>
-                <div className="absolute inset-y-0 right-0 w-5 flex flex-col justify-around items-center py-1">
-                  {[0,1,2].map(j => <div key={j} className="w-2.5 h-2 rounded-sm bg-black/60" />)}
-                </div>
-                {/* Frames */}
-                <div className="absolute inset-y-1 left-6 right-6 flex gap-1">
-                  {[0.3,0.6,0.45,0.7,0.35].map((op, i) => (
-                    <div key={i} className="flex-1 rounded-sm" style={{ background: `rgba(255,107,107,${op * 0.6})` }} />
-                  ))}
-                </div>
-                {/* Play icon overlay */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,107,107,0.25)", border: "1px solid rgba(255,107,107,0.4)" }}>
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="rgba(255,107,107,0.9)"><polygon points="2,1 9,5 2,9"/></svg>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 pb-7 pt-3 flex-1 flex flex-col">
-              <div className="flex items-center gap-2 mb-2.5">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ background: "rgba(255,107,107,0.12)", border: "1px solid rgba(255,107,107,0.2)" }}>🎬</div>
-                <h3 className="heading-section text-xl text-[var(--text-primary)]">Musik Video</h3>
-                <span className="label-caps px-2 py-0.5 rounded-full text-[8px]" style={{ background: "rgba(255,107,107,0.08)", color: "rgba(255,107,107,0.7)", border: "1px solid rgba(255,107,107,0.18)" }}>SEGERA</span>
-              </div>
-              <p className="text-sm text-[var(--text-muted)] leading-relaxed flex-1">
-                Dari audio ke video sinematik AI penuh efek. Nonton hasilnya bikin melongo.
-              </p>
-              <div className="mt-5 flex items-center gap-2 px-4 py-2.5 rounded-xl" style={{ background: "rgba(255,107,107,0.06)", border: "1px solid rgba(255,107,107,0.14)" }}>
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 glow-pulse" style={{ background: "rgba(255,107,107,0.7)" }} />
-                <span className="text-xs text-[var(--text-faint)]">Dalam pengembangan — segera hadir</span>
-              </div>
-            </div>
-          </motion.div>
-
-        </div>
-      </section>
-
-      <div className="section-rule mx-5 sm:mx-8 lg:mx-12" />
-
-      {/* ── Platform Distribution ───────────────────────────────── */}
-      <section className="px-5 sm:px-8 lg:px-12 py-20 max-w-7xl mx-auto">
-        <motion.div {...fadeUp(0)} className="mb-12">
-          <p className="label-caps mb-2" style={{ color: "var(--accent-red)" }}>Distribusi Musik</p>
-          <h2 className="heading-display text-[var(--text-primary)]" style={{ fontSize: "clamp(2.4rem, 6vw, 4.5rem)", letterSpacing: "-0.04em" }}>
-            Segera Hadir<br />Di Mana-Mana.
-          </h2>
-          <p className="text-[var(--text-muted)] text-sm mt-3">Musikmu akan bisa langsung kita publish ke semua platform</p>
-        </motion.div>
-
-        <div className="space-y-3">
-          {/* YouTube — full width featured */}
-          <motion.div
-            {...fadeUp(0.05)}
-            className="relative overflow-hidden rounded-2xl p-5 sm:p-6 flex items-center gap-5"
-            style={{ background: "linear-gradient(135deg, rgba(255,0,0,0.08), rgba(255,0,0,0.03))", border: "1px solid rgba(255,0,0,0.2)" }}
-          >
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,0,0,0.12)" }}>
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="#FF0000">
-                <path d="M21.582 7.2s-.21-1.47-.85-2.12c-.81-.85-1.72-.85-2.13-.9C15.97 4 12 4 12 4s-3.97 0-6.6.18c-.41.05-1.32.05-2.13.9-.64.65-.85 2.12-.85 2.12S2.2 8.9 2.2 10.6v1.6c0 1.7.22 3.4.22 3.4s.21 1.47.85 2.12c.81.85 1.88.82 2.35.91C7 18.8 12 18.8 12 18.8s3.97 0 6.6-.18c.41-.05 1.32-.06 2.13-.91.64-.65.85-2.12.85-2.12s.22-1.7.22-3.4v-1.6c0-1.7-.22-3.4-.22-3.4zM9.74 14.85V8.66l5.76 3.1-5.76 3.09z"/>
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-[var(--text-primary)]">YouTube Music</p>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">Upload langsung ke channel · Monetize dari hari pertama</p>
-            </div>
-            <span className="label-caps px-2.5 py-1 rounded-full text-[8px] flex-shrink-0" style={{ background: "rgba(255,0,0,0.1)", color: "#FF0000", border: "1px solid rgba(255,0,0,0.2)" }}>SEGERA</span>
-            <div className="absolute right-24 sm:right-32 top-0 bottom-0 flex items-center gap-px opacity-10 pointer-events-none">
-              {Array.from({ length: 20 }, (_, i) => (
-                <div key={i} className="w-1 rounded-full" style={{ height: `${20 + Math.sin(i * 0.8) * 16}px`, background: "#FF0000" }} />
-              ))}
-            </div>
-          </motion.div>
-
-          {/* 4 platforms: 2×2 mobile, 4-col desktop */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-
-            {/* TikTok */}
-            <motion.div {...fadeUp(0.1)} className="relative overflow-hidden rounded-2xl p-4 sm:p-5 flex flex-col gap-3"
-              style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))", border: "1px solid rgba(255,255,255,0.1)" }}>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,255,255,0.06)" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-                  <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.73a4.84 4.84 0 01-1.01-.04z"/>
-                </svg>
-              </div>
-              <div>
-                <p className="font-bold text-[var(--text-primary)] text-sm">TikTok</p>
-                <p className="text-xs text-[var(--text-muted)] leading-tight mt-0.5">Viral lewat For You Page</p>
-              </div>
-              <span className="label-caps text-[7px] px-2 py-0.5 rounded-full self-start" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)" }}>SEGERA</span>
-            </motion.div>
-
-            {/* Spotify */}
-            <motion.div {...fadeUp(0.13)} className="relative overflow-hidden rounded-2xl p-4 sm:p-5 flex flex-col gap-3"
-              style={{ background: "linear-gradient(135deg, rgba(30,215,96,0.07), rgba(30,215,96,0.02))", border: "1px solid rgba(30,215,96,0.18)" }}>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "rgba(30,215,96,0.1)" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="#1ED760">
-                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                </svg>
-              </div>
-              <div>
-                <p className="font-bold text-[var(--text-primary)] text-sm">Spotify</p>
-                <p className="text-xs text-[var(--text-muted)] leading-tight mt-0.5">Streaming ke jutaan pendengar</p>
-              </div>
-              <span className="label-caps text-[7px] px-2 py-0.5 rounded-full self-start" style={{ background: "rgba(30,215,96,0.08)", color: "#1ED760", border: "1px solid rgba(30,215,96,0.2)" }}>SEGERA</span>
-            </motion.div>
-
-            {/* Instagram */}
-            <motion.div {...fadeUp(0.16)} className="relative overflow-hidden rounded-2xl p-4 sm:p-5 flex flex-col gap-3"
-              style={{ background: "linear-gradient(135deg, rgba(225,48,108,0.07), rgba(193,53,132,0.03))", border: "1px solid rgba(225,48,108,0.18)" }}>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, rgba(225,48,108,0.15), rgba(193,53,132,0.1))" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="url(#ig-grad)">
-                  <defs>
-                    <linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#f09433"/>
-                      <stop offset="50%" stopColor="#dc2743"/>
-                      <stop offset="100%" stopColor="#bc1888"/>
-                    </linearGradient>
-                  </defs>
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                </svg>
-              </div>
-              <div>
-                <p className="font-bold text-[var(--text-primary)] text-sm">Instagram</p>
-                <p className="text-xs text-[var(--text-muted)] leading-tight mt-0.5">Reels & Stories langsung</p>
-              </div>
-              <span className="label-caps text-[7px] px-2 py-0.5 rounded-full self-start" style={{ background: "rgba(225,48,108,0.08)", color: "#E1306C", border: "1px solid rgba(225,48,108,0.2)" }}>SEGERA</span>
-            </motion.div>
-
-            {/* Noice Indonesia — yellow brand */}
-            <motion.div {...fadeUp(0.19)} className="relative overflow-hidden rounded-2xl p-4 sm:p-5 flex flex-col gap-3"
-              style={{ background: "linear-gradient(135deg, rgba(245,209,0,0.1), rgba(245,209,0,0.03))", border: "1px solid rgba(245,209,0,0.25)" }}>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "#F5D100" }}>
-                <NoiceIcon size={26} />
-              </div>
-              <div>
-                <p className="font-bold text-[var(--text-primary)] text-sm">Noice Indonesia</p>
-                <p className="text-xs text-[var(--text-muted)] leading-tight mt-0.5">Platform musik lokal #1</p>
-              </div>
-              <span className="label-caps text-[7px] px-2 py-0.5 rounded-full self-start" style={{ background: "rgba(245,209,0,0.1)", color: "#F5D100", border: "1px solid rgba(245,209,0,0.3)" }}>SEGERA</span>
-            </motion.div>
-
-          </div>
-        </div>
-
-        <motion.p {...fadeUp(0.25)} className="text-center text-xs text-[var(--text-faint)] mt-6">
-          Distribusi otomatis — lo bikin, kita yang urus sisanya 🚀
-        </motion.p>
-      </section>
-
-      <div className="section-rule mx-5 sm:mx-8 lg:mx-12" />
-
-      {/* ── Final CTA ───────────────────────────────────────────── */}
-      <section className="px-5 sm:px-8 py-24 text-center relative overflow-hidden">
-        <FloatingOrb style={{ width: 600, height: 600, top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "radial-gradient(circle, rgba(255,45,85,0.11) 0%, transparent 65%)" }} />
-        <motion.div {...fadeUp(0)} className="relative z-10 max-w-2xl mx-auto">
-          <h2 className="heading-display text-[var(--text-primary)] mb-6" style={{ fontSize: "clamp(2.8rem, 8vw, 6rem)", letterSpacing: "-0.05em", lineHeight: 0.92 }}>
-            Siap Gas<br />
-            <span className="text-gradient-fire">Bikin Musik?</span>
-          </h2>
-          <p className="text-[var(--text-muted)] text-sm leading-relaxed mb-8 max-w-sm mx-auto">
-            Gak perlu studio. Gak perlu pengalaman musik.<br />
-            Cukup tulis vibenya — AI yang bikin lagunya.
+  return (
+    <section style={{ background: C.creamDark, padding: "96px 24px" }}>
+      <div style={{ maxWidth: 960, margin: "0 auto" }}>
+        <motion.div {...fadeUp(0)} style={{ textAlign: "center", marginBottom: 56 }}>
+          <p style={{ fontSize: 12, letterSpacing: "0.14em", color: C.burgundy, fontWeight: 700, marginBottom: 12, textTransform: "uppercase" }}>
+            Semua momen
           </p>
-          <button onClick={onStart} className="btn-primary rounded-2xl py-4 px-12 text-base">
-            Mulai Sekarang 🚀
-          </button>
-          <p className="text-xs text-[var(--text-faint)] mt-4">Daftar via WhatsApp · Langsung bisa pakai</p>
+          <h2 style={{ fontFamily: "Georgia, serif", fontSize: "clamp(1.8rem, 5vw, 2.8rem)", color: C.nearBlack, margin: "0 0 10px" }}>
+            Untuk momen apa saja
+          </h2>
+          <p style={{ color: C.mutedLight, fontSize: 15, margin: 0 }}>Pilih momennya, kita bikinkan lagunya.</p>
         </motion.div>
-      </section>
 
-      {/* ── Footer ─────────────────────────────────────────────── */}
-      <footer className="border-t border-[var(--border-subtle)] px-5 sm:px-8 lg:px-12 py-10">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-gradient-red flex items-center justify-center shadow-glow">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                <path d="M9 18V5l12-2v13M6 21a3 3 0 100-6 3 3 0 000 6zm12-2a3 3 0 100-6 3 3 0 000 6z"/>
-              </svg>
-            </div>
-            <span className="heading-display text-sm text-gradient-studio">KREASI AI</span>
-          </div>
-          <p className="text-xs text-[var(--text-faint)] text-center">by Imaji AI · UEN 202615181W · Dibuat dengan ❤️ di Indonesia</p>
-          <div className="flex items-center gap-4 text-xs text-[var(--text-faint)]">
-            <a href={YT_CHANNEL} target="_blank" rel="noopener noreferrer" className="hover:text-[var(--text-muted)] transition-colors">YouTube</a>
-            <span>·</span><span className="opacity-40">Spotify (soon)</span>
-            <span>·</span><span className="opacity-40">TikTok (soon)</span>
-          </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 16 }}>
+          {occasions.map(({ emoji, label }, i) => (
+            <motion.button key={label}
+              {...fadeUp(Math.floor(i / 4) * 0.06)}
+              onClick={onStart}
+              onHoverStart={() => setHovered(label)}
+              onHoverEnd={() => setHovered(null)}
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              style={{
+                background: hovered === label ? C.white : C.white,
+                border: `1.5px solid ${hovered === label ? C.burgundy : "rgba(155,35,53,0.08)"}`,
+                borderRadius: 16, padding: "22px 8px 16px",
+                cursor: "pointer", display: "flex", flexDirection: "column",
+                alignItems: "center", gap: 10,
+                boxShadow: hovered === label
+                  ? `0 8px 24px rgba(155,35,53,0.15), 0 0 0 1px ${C.burgundy}20 inset`
+                  : "0 2px 8px rgba(155,35,53,0.05)",
+                transition: "border-color 0.15s, box-shadow 0.15s",
+              }}
+            >
+              <span style={{ fontSize: 34 }}>{emoji}</span>
+              <span style={{ fontSize: 11, color: hovered === label ? C.burgundy : C.muted, fontWeight: 600, textAlign: "center", lineHeight: 1.35, transition: "color 0.15s" }}>
+                {label}
+              </span>
+            </motion.button>
+          ))}
         </div>
-        <p className="text-xs text-[var(--text-faint)] text-center mt-6">© 2025 Imaji AI. All rights reserved.</p>
-      </footer>
+      </div>
+    </section>
+  );
+}
+
+// ─── Section 5 : Final CTA ───────────────────────────────────────────────────
+function FinalCTASection({ onStart }: { onStart: () => void }) {
+  return (
+    <section style={{
+      background: `linear-gradient(160deg, ${C.nearBlack} 0%, ${C.burgundy} 60%, ${C.darkMid} 100%)`,
+      padding: "112px 24px", textAlign: "center", position: "relative", overflow: "hidden",
+    }}>
+      {/* Glow */}
+      <div style={{
+        position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+        width: 600, height: 400,
+        background: `radial-gradient(ellipse at center, rgba(196,132,74,0.12) 0%, transparent 65%)`,
+        pointerEvents: "none",
+      }}/>
+      <GrainOverlay opacity={0.04}/>
+
+      <motion.div {...fadeUp(0)} style={{ maxWidth: 600, margin: "0 auto", position: "relative", zIndex: 1 }}>
+        {/* Music note decorative */}
+        <div style={{ fontSize: 40, marginBottom: 24, opacity: 0.8 }}>♫</div>
+
+        <h2 style={{
+          fontFamily: "Georgia, serif",
+          fontSize: "clamp(1.9rem, 5vw, 3rem)",
+          color: C.white, lineHeight: 1.2, margin: "0 0 16px",
+        }}>
+          Siapa yang ingin kamu kirimkan musiknya hari ini?
+        </h2>
+
+        <p style={{ color: "rgba(255,255,255,0.65)", fontSize: 16, margin: "0 0 40px", lineHeight: 1.6 }}>
+          3 hadiah gratis untuk mulai.<br/>
+          <span style={{ fontSize: 13, opacity: 0.6 }}>Tanpa kartu kredit · Langsung jadi · No install</span>
+        </p>
+
+        <motion.button
+          onClick={onStart}
+          whileHover={{ scale: 1.04, y: -2 }}
+          whileTap={{ scale: 0.97 }}
+          style={{
+            background: C.white,
+            color: C.burgundy, fontSize: 18, fontWeight: 700,
+            padding: "18px 56px", borderRadius: 9999,
+            border: "none", cursor: "pointer",
+            boxShadow: `0 8px 40px rgba(0,0,0,0.3), 0 2px 8px rgba(196,168,130,0.2)`,
+            letterSpacing: "0.01em",
+          }}
+        >
+          Mulai Sekarang →
+        </motion.button>
+
+        {/* Ambient waveform below CTA */}
+        <div style={{ marginTop: 48, display: "flex", justifyContent: "center" }}>
+          <AmbientWaveform barColor="rgba(255,255,255,0.2)" barOpacity={0.8} count={32} />
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+function FooterSection() {
+  return (
+    <footer style={{
+      background: C.nearBlack,
+      borderTop: `1px solid rgba(196,168,130,0.1)`,
+      padding: "40px 24px",
+    }}>
+      <div style={{
+        maxWidth: 900, margin: "0 auto",
+        display: "flex", flexDirection: "column", alignItems: "center",
+        gap: 8, textAlign: "center",
+      }}>
+        <img src="/logo.png" alt="Lovemelodia" style={{ height: 32, objectFit: "contain", mixBlendMode: "screen" }} />
+        <p style={{ fontSize: 12, color: "rgba(196,168,130,0.4)", margin: 0, letterSpacing: "0.02em" }}>
+          Musik untuk yang Kau Sayang
+        </p>
+        <p style={{ fontSize: 12, color: "rgba(196,168,130,0.3)", margin: "8px 0 0" }}>
+          by Imaji AI · lovemelodia.com · Dibuat dengan ❤️ di Indonesia
+        </p>
+        <p style={{ fontSize: 11, color: "rgba(196,168,130,0.18)", margin: 0 }}>
+          © {new Date().getFullYear()} Imaji AI
+        </p>
+      </div>
+    </footer>
+  );
+}
+
+// ─── Root ─────────────────────────────────────────────────────────────────────
+export default function LandingPage({ onStart }: LandingPageProps) {
+  return (
+    <div style={{ minWidth: 0, overflowX: "hidden" }}>
+      <HeroSection onStart={onStart} />
+      <HowItWorksSection />
+      <StoriesSection />
+      <OccasionGrid onStart={onStart} />
+      <FinalCTASection onStart={onStart} />
+      <FooterSection />
     </div>
   );
 }

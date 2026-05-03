@@ -1,39 +1,45 @@
-# PROJECT.md — Kreasi AI
+# PROJECT.md — Lovemelodia
 
 ## Core Value
-Turn a character photo + music vibe into a full MP4 music video novel — photorealistic storyboard images, AI-generated music, and dramatic transitions synced to the song's emotional arc. Three-stage flow with user checkpoints at each step.
+Create AI-generated music as a heartfelt gift for loved ones — wrap it in a beautiful occasion-themed gift card and share digitally or slip the QR tag into a physical gift (chocolate box, flower bouquet, wedding favor). Every gift tells a story through music.
+
+## Tagline
+"Create music for your loved ones"
 
 ## What We're Building
 A full-stack web app (Vite + React 19 + Express) that:
-- Accepts character images, descriptions, themes, and music vibe text from users
-- Calls Claude Sonnet (vision) to generate an enhanced music production prompt + 6–8 dramatic timepoints synced to the song's lyrical arc
-- Generates photorealistic storyboard images per timepoint via WaveSpeed Seedream v4.5
-- Generates music via WaveSpeed Lyria 3 Pro
-- Assembles a final MP4 using FFmpeg: Ken Burns per frame (intensity-driven zoom speed) + xfade transitions (variable duration per timepoint intensity) + music overlay
+- Lets users generate AI music via text prompt (Lyria 3 Pro) OR voice/humming (LeVo SongGeneration)
+- Wraps the music in a beautifully designed occasion gift card (12 themes: Birthday, Lover, Mother's Day, etc.)
+- Outputs three shareable formats: 1080×1080 PNG (feed/WA), 1080×1920 MP4 (Stories/TikTok), 85×55mm print tag (physical gift)
+- Public gift link: recipient opens `lovemelodia.com/gift/{id}` and plays the music — no login required
 - Authenticates via WhatsApp OTP (Fonnte) — no passwords
-- Tracks credits per user (100 free on signup)
+- i18n: Bahasa Indonesia + English from day 1
 - Deploys to Google Cloud Run (asia-southeast1)
 
 ## Stack
-- **Frontend:** React 19 + Vite + Tailwind CSS 4 + Motion + Lucide React (design system from jati-ai-space)
+- **Frontend:** React 19 + Vite + Tailwind CSS 4 + Motion + Lucide React
 - **Backend:** Node.js + Express + better-sqlite3 + Supabase
 - **Auth:** Fonnte WhatsApp OTP → JWT
-- **Music:** WaveSpeed Lyria 3 Pro
-- **Images:** WaveSpeed Seedream v4.5
-- **Video:** FFmpeg (Ken Burns zoompan + xfade timed to timepoints)
+- **Music (text):** WaveSpeed Lyria 3 Pro
+- **Music (voice):** WaveSpeed SongGeneration (LeVo) with prompt_audio
+- **Gift Cards:** Sharp (image composition) + FFmpeg (video) + qrcode
 - **Storage:** Google Cloud Storage
-- **Payments:** Airwallex
+- **Payments:** HitPay (IDR) + Stripe (global)
 - **Analytics:** BigQuery cost logging
 
 ## Reference Implementations
-- `/Users/jesi/imaji/jati-ai-space/` — Auth, credits, Seedream image gen, FFmpeg splice, GCS, Airwallex, cost-logger (copy verbatim)
-- `/Users/jesi/imaji/kreasi-ai/test_lyria.js` — Lyria fallback (Vertex AI) if WaveSpeed Lyria 3 Pro endpoint fails
+- `/Users/jesi/imaji/kreasi-ai/` — Auth, credits, Lyria music gen, FFmpeg, GCS, HitPay (copy patterns)
 
 ## GitHub
-- Repo: `imaji/kreasi-ai` (new, separate from vintatan/kreasi-ai)
-- Local: `/Users/jesi/imaji/kreasi-app/`
+- Repo: `imaji/lovemelodia` (new)
+- Local: `/Users/jesi/imaji/lovemelodia/`
+- Domain: `lovemelodia.com`
 - Region: `asia-southeast1`
-- Cloud Run service: `kreasi-ai`
+- Cloud Run service: `lovemelodia`
 
 ## Target Users
-Indonesian/SEA creators who want cinematic music video content from a single character photo and a music mood.
+Anyone who wants to gift music to someone they love — globally, launching Indonesia first. Occasions: birthdays, Valentine's, Mother's Day, anniversaries, graduations, weddings, Lebaran, Christmas, friendships.
+
+## Positioning
+**Global product. Indonesia first launch.**
+Lovemelodia is not a music creation tool — it's a gifting platform. The music is the gift, not the product.

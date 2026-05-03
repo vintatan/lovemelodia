@@ -7,19 +7,19 @@ import { fileURLToPath } from "url";
 import authRouter from "./routes/auth.js";
 import creditsRouter from "./routes/credits.js";
 import webhookRouter from "./routes/webhook.js";
-import projectsRouter from "./routes/projects.js";
-import stage1Router from "./routes/stage1.js";
-import stage2Router from "./routes/stage2.js";
-import stage3Router from "./routes/stage3.js";
+// import projectsRouter from "./routes/projects.js"; // M3+
+// import stage1Router from "./routes/stage1.js";     // removed — kreasi-ai wizard
+// import stage2Router from "./routes/stage2.js";     // removed — kreasi-ai wizard
+// import stage3Router from "./routes/stage3.js";     // removed — kreasi-ai wizard
 import musicRouter from "./routes/music.js";
-import novelRouter, { novelVideoProxy } from "./routes/novel.js";
-import albumRouter from "./routes/album.js";
-import albumNovelRouter from "./routes/album-novel.js";
+// import novelRouter, { novelVideoProxy } from "./routes/novel.js"; // removed — kreasi-ai
+// import albumRouter from "./routes/album.js";           // removed — kreasi-ai
+// import albumNovelRouter from "./routes/album-novel.js"; // removed — kreasi-ai
 import publicRouter from "./routes/public.js";
+import giftcardRouter from "./routes/giftcard.js";
 import { requireAuth } from "./middleware/auth.js";
 import { serviceAuthOrRequireAuth } from "./middleware/serviceAuth.js";
-import { getStaleAssemblyJobs, getStaleAlbums, updateAlbumStatus, addCreditsAsync } from "./lib/db.js";
-import { updateAlbumInSupabase } from "./lib/supabase.js";
+import { getStaleAssemblyJobs, addCreditsAsync } from "./lib/db.js";
 import { ensureBucketPublicAccess } from "./lib/gcs.js";
 
 declare global {
@@ -68,17 +68,10 @@ app.use((req, res, next) => {
 app.use("/api/auth", authRouter);
 app.use("/api/credits", serviceAuthOrRequireAuth, creditsRouter);
 app.use("/api/webhooks", webhookRouter);
-app.use("/api/projects", requireAuth, projectsRouter);
-app.use("/api/stage1", requireAuth, stage1Router);
-app.use("/api/stage2", requireAuth, stage2Router);
-app.use("/api/stage3", requireAuth, stage3Router);
 app.use("/api/music", serviceAuthOrRequireAuth, musicRouter);
-app.use("/api/album", requireAuth, albumRouter);
-app.use("/api/album-novel", requireAuth, albumNovelRouter);
-app.get("/api/novel/video/:jobId", novelVideoProxy);
-app.use("/api/novel", serviceAuthOrRequireAuth, novelRouter);
-
 app.use("/api/public", publicRouter);
+app.use("/api/giftcard", giftcardRouter);
+app.use("/api/public", giftcardRouter); // /api/public/gift/:shareId — no auth
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 // Serve Vite build in production
@@ -91,7 +84,7 @@ if (isProd) {
 }
 
 const server = app.listen(PORT, () => {
-  console.log(`[Kreasi AI] Server running on port ${PORT}`);
+  console.log(`[Lovemelodia] Server running on port ${PORT}`);
 });
 process.on("SIGTERM", () => server.close());
 process.on("SIGINT",  () => server.close());
@@ -109,18 +102,4 @@ async function reconcileStaleJobs(): Promise<void> {
 }
 
 reconcileStaleJobs().catch(err => console.error("[Reconcile] startup error:", err));
-
-// Reconcile stale albums — mark failed and refund package credits for albums stuck >20 min
-async function reconcileStaleAlbums(): Promise<void> {
-  const cutoff = Math.floor(Date.now() / 1000) - 20 * 60;
-  const stale = getStaleAlbums(cutoff);
-  for (const album of stale) {
-    console.log(`[Reconcile] Refunding stale album ${album.id} (${album.credits_charged} credits) for ${album.phone}`);
-    updateAlbumStatus(album.id, "failed");
-    void updateAlbumInSupabase(album.id, { status: "failed" });
-    await addCreditsAsync(album.phone, album.credits_charged, "refund").catch(() => {});
-  }
-}
-
-reconcileStaleAlbums().catch(err => console.error("[Reconcile] album startup error:", err));
 ensureBucketPublicAccess().catch(err => console.error("[GCS] startup error:", err));

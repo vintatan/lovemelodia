@@ -2,6 +2,7 @@ import { Router } from "express";
 import { nanoid } from "nanoid";
 import { getOrCreateUserAsync, getCredits, deductCreditsAsync, createTransaction, markPaidAndCredit, getTransactionByExternalIdAsync, redeemFreePromo, hasRedeemedPromo } from "../lib/db.js";
 import { createPaymentLink, getPaymentLinkStatus, getPaymentLinkStatusById } from "../lib/airwallex.js";
+import { createPaymentRequest, PACKAGES } from "../lib/hitpay.js";
 import { trackPaymentCompleted, hasRedeemedPromoInSupabase } from "../lib/supabase.js";
 
 const router = Router();
@@ -12,11 +13,7 @@ const PROMO_MAP: Record<string, number> = {
   IMAJIEASY: 50,
 };
 
-const PACKAGES = [
-  { name: "starter", credits: 20,  amountIdr: 10_000,  amountSgd: 1  },
-  { name: "creator", credits: 50,  amountIdr: 55_000,  amountSgd: 6  },
-  { name: "studio",  credits: 120, amountIdr: 115_000, amountSgd: 12 },
-];
+// PACKAGES is now defined in server/lib/hitpay.ts and imported above.
 
 router.get("/balance", async (req, res) => {
   const phone = req.user!.phone;
@@ -28,14 +25,50 @@ router.get("/packages", (_req, res) => {
   return res.json({ packages: PACKAGES });
 });
 
+// POST /api/credits/create-link — create a HitPay payment link for a credit package
+// TODO: Stripe — add /api/payment/create-stripe-session for multi-currency (SGD/USD) support
+router.post("/create-link", async (req, res) => {
+  const phone = req.user!.phone;
+  const { packageId } = req.body as { packageId?: string };
+  const pkg = packageId ? PACKAGES[packageId] : undefined;
+  if (!pkg) return res.status(400).json({ error: "Invalid packageId" });
+
+  const externalId = `lm-${nanoid()}`;
+  const origin = req.headers.origin || req.headers.referer?.replace(/\/$/, "") || "";
+  const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0].trim() ?? req.protocol;
+  const appUrl = origin || process.env.APP_URL || `${proto}://${req.get("host")}`;
+
+  try {
+    const payment = await createPaymentRequest({
+      amount: pkg.amount,
+      currency: pkg.currency as "IDR" | "SGD",
+      purpose: `Lovemelodia ${pkg.name} — ${pkg.credits} credits`,
+      referenceNumber: externalId,
+      redirectUrl: `${appUrl}?payment=success&ext=${externalId}`,
+      webhookUrl: `${appUrl}/api/webhooks/hitpay`,
+    });
+
+    createTransaction({
+      id: nanoid(), phone, externalId, linkId: payment.id,
+      packageName: packageId!, credits: pkg.credits, amount: pkg.amount, currency: pkg.currency,
+    });
+
+    return res.json({ url: payment.url, externalId });
+  } catch (err: any) {
+    console.error("[Credits] create-link error:", err);
+    return res.status(500).json({ error: "Payment creation failed" });
+  }
+});
+
+// Legacy Airwallex purchase route — kept for backward compat, superseded by /create-link (HitPay)
 router.post("/purchase", async (req, res) => {
   const phone = req.user!.phone;
   const { packageName, currency = "IDR" } = req.body as { packageName?: string; currency?: string };
-  const pkg = PACKAGES.find(p => p.name === packageName);
+  const pkg = packageName ? PACKAGES[packageName] : undefined;
   if (!pkg) return res.status(400).json({ error: "Invalid package" });
 
   const externalId = `kreasi-${nanoid()}`;
-  const amount = currency === "SGD" ? pkg.amountSgd : pkg.amountIdr;
+  const amount = pkg.amount;
   const origin = req.headers.origin || req.headers.referer?.replace(/\/$/, "") || "";
   const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0].trim() ?? req.protocol;
   const appUrl = origin || process.env.APP_URL || `${proto}://${req.get("host")}`;
@@ -45,13 +78,13 @@ router.post("/purchase", async (req, res) => {
       externalId,
       amount,
       currency: currency as "IDR" | "SGD",
-      description: `Kreasi AI ${pkg.name} — ${pkg.credits} credits`,
+      description: `Lovemelodia ${pkg.name} — ${pkg.credits} credits`,
       returnUrl: `${appUrl}?payment=success&ext=${externalId}`,
       cancelUrl: `${appUrl}?payment=cancelled`,
     });
 
     createTransaction({
-      id: nanoid(), phone, externalId, linkId: payment.id, packageName: pkg.name,
+      id: nanoid(), phone, externalId, linkId: payment.id, packageName: packageName!,
       credits: pkg.credits, amount, currency,
     });
 

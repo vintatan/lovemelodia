@@ -2,6 +2,14 @@ import crypto from "crypto";
 
 const BASE_URL = "https://api.hit-pay.com/v1";
 
+// TODO: Stripe — for multi-currency support, add a separate /api/payment/create-stripe-session route
+// so HitPay (IDR) and Stripe (SGD/USD) can coexist without touching this file.
+export const PACKAGES: Record<string, { name: string; credits: number; amount: number; currency: string }> = {
+  starter:      { name: "Starter",   credits: 5,  amount: 15000, currency: "IDR" },
+  creator:      { name: "Creator",   credits: 15, amount: 35000, currency: "IDR" },
+  unlimited_mo: { name: "Unlimited", credits: 30, amount: 75000, currency: "IDR" },
+};
+
 function apiKey(): string {
   const k = process.env.HITPAY_API_KEY;
   if (!k) throw new Error("HITPAY_API_KEY not set");
